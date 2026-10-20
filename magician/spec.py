@@ -17,6 +17,7 @@ the basic families, so they are the same items for every training mix.
 """
 import math
 import os
+import re
 
 import numpy as np
 
@@ -433,9 +434,11 @@ def parse_tokens(text, T=T_REPLY):
 
 
 def parse_plan(text, L, T=T_REPLY):
-    """Inverse of plan_text: {concept name: profile [L, T]} for every line that parses."""
+    """Inverse of plan_text: {concept name: profile [L, T]} for every line that parses. Commas with or without spaces
+    and an 'SD' after each layer-by-layer value are accepted, so a plan is judged on its numbers, not its spacing."""
     out = {}
     for line in text.strip().split('\n'):
+        line = re.sub(r'\s*,\s*', ', ', line)
         name, sep, rest = line.partition(': ')
         parts = rest.split('; ')
         if not sep or len(parts) < 2:
@@ -445,7 +448,7 @@ def parse_plan(text, L, T=T_REPLY):
             for p in parts[:-1]:
                 if p.startswith('layer by layer '):
                     for kv in p[len('layer by layer '):].split(', '):
-                        l, x = kv.split(' ')
+                        l, x = kv.replace(' SD', '').split(' ')
                         F[int(l)] = float(x)
                 elif p != 'no change on any layer':
                     x, _, ls = p.partition(' SD on layers ')
