@@ -50,8 +50,9 @@ ro = C.Readout(prep, bank)
 k = bank.index(ci)
 
 
-def change(exs):
-    """Adapter on minus adapter off on the same tokens, [reply tokens, L], and the requested change."""
+def change(exs, full=False):
+    """Adapter on minus adapter off on the same tokens, [reply tokens, L], and the requested change. full: both for
+    every training concept, [reply tokens, L, K], and the adapter's next-token log-probabilities on the reply."""
     mids = [C.plan_ids(tok, e) for e in exs] if C.PLAN else None
     ids, att, pos, mask, starts, lens = C.batch_inputs(tok, exs, replies, mids=mids)
     tgt, _ = C.targets(exs, lens, prep, bank, pos.shape[1])
@@ -59,15 +60,34 @@ def change(exs):
         with model.disable_adapter():
             measure.forward(lm, ids, att)
             zb = ro.z(res.h, pos, mask)
-        measure.forward(lm, ids, att)
+        hs = measure.forward(lm, ids, att)
         dz = ro.z(res.h, pos, mask) - zb
-    n = lens[0]
+        n = lens[0]
+        if full:
+            g = hs[0].gather(0, (pos[0, :n].to(C.DEVICE) - 1)[:, None].expand(-1, hs.shape[-1]))
+            return dz[0, :n].cpu(), tgt[0, :n], torch.log_softmax(lm.lm_head(g).float(), -1).cpu()
     return dz[0, :n, :, k].cpu().half(), tgt[0, :n, :, k].half()
 
 
-dz, target = change([ex])
+dz_all, tgt_all, logp = change([ex], full=True)
+dz, target = dz_all[:, :, k].half(), tgt_all[:, :, k].half()
 out = {'user': ex['user'], 'task': ex['task'], 'concept': ci, 'fams': ex['fams'],
        'reply': tok.decode(replies[ex['task']]['ids']), 'target': target, 'dz': dz}
+# the other training concepts: the three with the largest target (the change the requested write implies)
+mag = tgt_all.abs().amax((0, 1))
+mag[k] = -1
+others = mag.topk(3).indices.tolist()
+out.update({'others': [bank[j] for j in others], 'dz_others': dz_all[:, :, others].half(),
+            'target_others': tgt_all[:, :, others].half(), 'others_max_target': float(mag.max())})
+# next-token probabilities: the original model on the bare question (the KL reference) and the adapter, at the reply
+# token where the original model's top-64 distribution has the highest entropy
+ref = prep['kl'][ex['task']]
+v, i = ref['topv'].float(), ref['topi'].long()
+t = int(-(v.exp() * v).sum(-1).argmax())
+top = i[t, :4]
+kl = C.kl_topk(v, i, logp)
+out['next_token'] = {'pos': t, 'tokens': [tok.decode(x) for x in top.tolist()], 'p_orig': v[t, :4].exp().tolist(),
+                     'p_trained': logp[t, top].exp().tolist(), 'kl': float(kl[t]), 'kl_mean': float(kl.mean())}
 if C.PLAN:
     out['plan'] = spec.plan_text(ex['edits'])
     out['dz_alone'] = change([dict(ex, user=C.TASKS[ex['task']])])[0]
@@ -78,4 +98,6 @@ for key in ('dz', 'dz_alone'):
         print(key, 'per layer, mean over reply tokens', [round(v, 2) for v in d.mean(0).tolist()])
         print(key, 'r', float(torch.corrcoef(torch.stack([d.flatten(), t.flatten()]))[0, 1]))
 print(ex['user'])
+print('others', [K.NAMES[c] for c in out['others']], 'largest other target', out['others_max_target'])
+print('next token', out['next_token'])
 print('target per layer', [round(v, 2) for v in out['target'].float().mean(0).tolist()])
