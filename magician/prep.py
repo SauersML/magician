@@ -3,7 +3,7 @@
 1. its greedy replies (64 tokens) to the 310 questions, with no instruction (OUT/replies.json);
 2. one unit direction per concept and layer: the mean residual over the concept's slot span (from the concept to the
    end of the sentence) across 40 sentences, minus that mean averaged over the training concepts; the other 8
-   sentences check that each concept's own direction scores it highest (accuracy per layer);
+   sentences, minus the same average, check that each concept's own direction scores it highest (accuracy per layer);
 3. m, s: mean and SD of every concept's projection over the reply tokens of the training questions;
 4. the original model's top-64 next-token log-probabilities on every reply token (for the KL term);
 5. gram: dot products between the unit directions at each layer.
@@ -74,7 +74,7 @@ dirs = M - center
 dirs = dirs / dirs.norm(dim=-1, keepdim=True)
 dirs = dirs.permute(1, 0, 2).contiguous()                              # [L, NK, d]
 V = span_means(VAL_S)                                                  # [8, NK, L, d]
-sc = torch.einsum('sknd,nqd->sknq', V, dirs)                           # [8, NK, L, NK]
+sc = torch.einsum('sknd,nqd->sknq', V - center, dirs)                  # [8, NK, L, NK], centred like the directions
 acc = (sc.argmax(-1) == torch.arange(NK)[None, :, None]).float()       # [8, NK, L]
 val_acc = {'train': acc[:, K.TRAIN_CONCEPTS].mean((0, 1)).tolist(), 'test': acc[:, K.TEST_CONCEPTS].mean((0, 1)).tolist()}
 print(f'directions {time.time() - t0:.0f}s; held-out sentence accuracy (180-way) per layer, test concepts:',
