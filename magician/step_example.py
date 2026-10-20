@@ -73,12 +73,9 @@ dz_all, tgt_all, logp = change([ex], full=True)
 dz, target = dz_all[:, :, k].half(), tgt_all[:, :, k].half()
 out = {'user': ex['user'], 'task': ex['task'], 'concept': ci, 'fams': ex['fams'],
        'reply': tok.decode(replies[ex['task']]['ids']), 'target': target, 'dz': dz}
-# the other training concepts: the three with the largest target (the change the requested write implies)
-mag = tgt_all.abs().amax((0, 1))
-mag[k] = -1
-others = mag.topk(3).indices.tolist()
-out.update({'others': [bank[j] for j in others], 'dz_others': dz_all[:, :, others].half(),
-            'target_others': tgt_all[:, :, others].half(), 'others_max_target': float(mag.max())})
+# every training concept: the change the adapter makes and the change the requested write implies through the overlap
+# of the concept directions (the target of the loss term on the concepts the instruction does not name)
+out.update({'bank': bank, 'dz_bank': dz_all.half(), 'target_bank': tgt_all.half()})
 # next-token probabilities: the original model on the bare question (the KL reference) and the adapter, at the reply
 # token where the original model's top-64 distribution has the highest entropy
 ref = prep['kl'][ex['task']]
@@ -98,6 +95,10 @@ for key in ('dz', 'dz_alone'):
         print(key, 'per layer, mean over reply tokens', [round(v, 2) for v in d.mean(0).tolist()])
         print(key, 'r', float(torch.corrcoef(torch.stack([d.flatten(), t.flatten()]))[0, 1]))
 print(ex['user'])
-print('others', [K.NAMES[c] for c in out['others']], 'largest other target', out['others_max_target'])
+t_mean = tgt_all.mean((0, 1))
+t_mean[k] = float('nan')
+print('other concepts, mean target: highest', K.NAMES[bank[int(t_mean.nan_to_num(-9).argmax())]],
+      float(t_mean.nan_to_num(-9).max()), 'lowest', K.NAMES[bank[int(t_mean.nan_to_num(9).argmin())]],
+      float(t_mean.nan_to_num(9).min()))
 print('next token', out['next_token'])
 print('target per layer', [round(v, 2) for v in out['target'].float().mean(0).tolist()])

@@ -692,8 +692,12 @@ def training():
     term(yy, 2 * mh + 8, "", "MSE", "requested\nconcept")
     yy = concepts(yy, [(S["dz"].float().numpy(), tgt, name)]) - 30
     term(yy, 2 * mh + 8, "+", "MSE", "other concepts:\nonly their overlap\nwith " + name)
-    dzo, tgo = S["dz_others"].float().numpy(), S["target_others"].float().numpy()
-    yb2 = concepts(yy, [(dzo[:, :, k], tgo[:, :, k], K.NAMES[c]) for k, c in enumerate(S["others"])], False)
+    # the other concepts whose target rises most, changes least, and falls most
+    bank, dzb, tgb = list(S["bank"]), S["dz_bank"].float().numpy(), S["target_bank"].float().numpy()
+    mean, peak = tgb.mean((0, 1)), np.abs(tgb).max((0, 1))
+    mean[bank.index(S["concept"])], peak[bank.index(S["concept"])] = np.nan, np.inf
+    picks = (int(np.nanargmax(mean)), int(np.argmin(peak)), int(np.nanargmin(mean)))
+    yb2 = concepts(yy, [(dzb[:, :, j], tgb[:, :, j], K.NAMES[bank[j]]) for j in picks], False)
     write(ax, x0 + 3 * mw + 2 * mg + 24, yy - mh - 4, "…", 34, True, MUTED)
     yy = yb2 - 30
     ph = plan_height(S["plan"], 18, aw - 40) + 36
