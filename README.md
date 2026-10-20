@@ -31,5 +31,5 @@ A second training mix (`spec.LAYER_MIX`: number properties of the layer, complem
 | `magician/prep.py` | Concept directions, standardization and the original model's replies. |
 | `magician/train.py` | LoRA training. |
 | `magician/measure.py`, `magician/evaluate.py` | Scoring on the trained model's own replies. |
-| `magician/run_pod.sh` | Prep, training and evaluation of several runs on one GPU. |
+| `magician/run_pod.sh` | Prep, training and evaluation of several runs on one GPU, each with its plan mode and starting adapter. |
 | `figures/make_figures.py` | Every figure, from `results/`. |
