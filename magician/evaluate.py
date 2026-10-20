@@ -16,12 +16,15 @@ from peft import PeftModel
 import common as C
 import measure
 import spec
+from planner import Planner
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--adapter', required=True)
 ap.add_argument('--name', required=True)
 ap.add_argument('--n', type=int, default=96)
 ap.add_argument('--gen_n', type=int, default=24)
+ap.add_argument('--base_plan_sets', default='new_layer_patterns,all_new',
+                help='with plans: sets also scored with plans the original model writes (planner.py)')
 args = ap.parse_args()
 
 prep = torch.load(os.path.join(C.OUT, 'prep.pt'), weights_only=False)
@@ -37,6 +40,7 @@ os.makedirs(odir, exist_ok=True)
 
 out = {'adapter': args.adapter, 'model': C.MODEL, 'sets': {}}
 profiles = {}
+planner = None
 for name in spec.EVAL_SETS:
     exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.n)
     items = measure.score(lm, model, tok, res, prep, exs, replies, orig=True, keep_profiles=True)
@@ -51,6 +55,17 @@ for name in spec.EVAL_SETS:
         fa = measure.score(lm, model, tok, res, prep, exs, replies, forced='alone')   # the plan after the bare question
         out['sets'][name]['alone'] = {'summary': {k: measure.summary(fa, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
                                       'items': fa}
+    if C.PLAN and name in args.base_plan_sets.split(','):   # the original model writes the plan, the adapter carries it out
+        planner = planner or Planner(model, tok, L)
+        plans = [planner(ex) for ex in exs]
+        fb = measure.score(lm, model, tok, res, prep, [dict(ex, plan=p) for p, ex in zip(plans, exs)], replies, forced=True)
+        ps = [measure.plan_scores(p, ex, L) for p, ex in zip(plans, exs)]
+        for it, p in zip(fb, ps):
+            it.update(p)
+        out['sets'][name]['base_plan'] = {'summary': {k: measure.summary(fb, k) for k in ('frac', 'r', 'leak', 'plan_exact', 'plan_r')},
+                                          'items': fb}
+        print(f'{name:20s} plan by the original model: exact {out["sets"][name]["base_plan"]["summary"]["plan_exact"][0]:.2f}'
+              f' frac {out["sets"][name]["base_plan"]["summary"]["frac"][0]:.2f} r {out["sets"][name]["base_plan"]["summary"]["r"][0]:.2f}', flush=True)
     s = summ
     print(f'{name:20s} trained frac {s["frac"] and s["frac"][0]:} r {s["r"] and s["r"][0]} rms {s["rms"] and s["rms"][0]}'
           f' | original frac {s["orig"]["frac"] and s["orig"]["frac"][0]} r {s["orig"]["r"] and s["orig"]["r"][0]}'
