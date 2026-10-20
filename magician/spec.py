@@ -199,8 +199,9 @@ def render_clause(rng, wording, ci, sign, a, where, when, pronoun=False):
     name, phrase = K.NAMES[ci], K.PHRASES[ci]
     v = rng.choice((UP if sign > 0 else DOWN)[wording])
     pre, post = size_phrase(rng, a)
-    if pronoun:
-        return f'{pre}{v} it{post} {where}{when}'
+    if pronoun:  # a phrasal verb takes the pronoun before its particle: "turn it up"
+        head, _, particle = v.partition(' ')
+        return f'{pre}{head} it{" " + particle if particle else ""}{post} {where}{when}'
     c = rng.choice(CLAUSES[wording])
     return pre + c.format(v=v, name=name, phrase=phrase, where=where, when=when, size=post)
 
