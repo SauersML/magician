@@ -1012,17 +1012,21 @@ def datapoints():
 COLUMNS = (("requested", "target", INK), ("trained model", "dz", PURPLE))
 
 
-def example_text(ax, x, top, w, row):
+def example_text(ax, x, top, w, row, missing_ok=False):
     """The tag, the instruction (parts never seen in training highlighted) and the trained model's thinking block,
-    with the parts of its plan that differ from the instruction outlined in red. Returns the bottom edge."""
+    with the parts of its plan that differ from the instruction outlined in red, and (missing_ok) the requested layers
+    the plan does not list. Returns the bottom edge."""
     tag, new, it, prof = row
     text = instruction_only(it["user"], TASKS[it["task"]])
     wrong, missing = plan_diff(it, prof)
-    assert not missing, missing
+    assert missing_ok or not missing, missing
     pill(ax, x, top - 40, tag, 26, NEW if new else "white")
     ty = rich(ax, x, top - 84, text, 28, w, marks_for(text, it, new))
-    return thinking_block(ax, x, ty - 24, w, it["plan"], False, size=21, label="trained model's thinking block",
-                          wrong=wrong, lsize=22)
+    y = thinking_block(ax, x, ty - 24, w, it["plan"], False, size=21, label="trained model's thinking block",
+                       wrong=wrong, lsize=22)
+    for name, ls in missing.items():
+        y = rich(ax, x, y - 20, f"Requested layers not in the plan: {', '.join(map(str, ls))}", 24, w, color=RED)
+    return y
 
 
 def token_axis(ax, x, y, w):
@@ -1031,13 +1035,13 @@ def token_axis(ax, x, y, w):
     write(ax, x + w - 4, y, str(T_SHOWN - 1), 22, color=MUTED, ha="right")
 
 
-def example_grid(ax, top, rows, x=16, width=2 * W - 32, gap=24):
+def example_grid(ax, top, rows, x=16, width=2 * W - 32, gap=24, missing_ok=False):
     """Panels side by side, one per instruction: text on top, then for each requested concept the requested and the
     trained model's change side by side; the heatmaps of every panel start at the same height. Returns the bottom."""
     pw = (width - (len(rows) - 1) * gap) / len(rows)
     pad, lm, hg = 30, 72, 22
     xs = [x + k * (pw + gap) for k in range(len(rows))]
-    hy = min(example_text(ax, px + pad, top, pw - 2 * pad, row) for px, row in zip(xs, rows)) - 50
+    hy = min(example_text(ax, px + pad, top, pw - 2 * pad, row, missing_ok) for px, row in zip(xs, rows)) - 50
     bottoms = []
     for px, (_, _, it, prof) in zip(xs, rows):
         hx = px + pad + lm
@@ -1138,6 +1142,28 @@ def outside():
     colour_scale(ax, W, y - 40, size=28)
     crop(fig, ax, y - 110, 4000)
     save(fig, "outside")
+
+
+def wave():
+    """Waves across layers (never seen in training): the instruction closest to the median pattern match in each of
+    the two test sets with waves, and the waves with the highest and the lowest pattern match."""
+    E, P = data()
+    pool = [(s, j) for s in ("new_layer_patterns", "all_new") for j, it in enumerate(E["sets"][s]["items"])
+            if "wave" in it["fams"]]
+    new = {"new_layer_patterns": ("layers",), "all_new": ("concept", "wording", "layers")}
+    r = lambda sj: E["sets"][sj[0]]["items"][sj[1]]["r"]
+    picks = [("new_layer_patterns", typical(E["sets"]["new_layer_patterns"]["items"], lambda it: "wave" in it["fams"]),
+              "Wave, median instruction"),
+             ("all_new", typical(E["sets"]["all_new"]["items"], lambda it: "wave" in it["fams"]),
+              "Wave, concept and wording also new, median"),
+             (*max(pool, key=r), "Wave, best instruction"), (*min(pool, key=r), "Wave, worst instruction")]
+    rows = [(tag, new[s], E["sets"][s]["items"][j], P[s][j]) for s, j, tag in picks]
+    fig, ax = canvas(4000, 2 * W)
+    y = example_grid(ax, 3980, rows[:2], missing_ok=True) - 24
+    y = example_grid(ax, y, rows[2:], missing_ok=True)
+    colour_scale(ax, W, y - 40, size=28)
+    crop(fig, ax, y - 110, 4000)
+    save(fig, "wave")
 
 
 # A plan in a thinking block.
@@ -1271,7 +1297,7 @@ def plan_height(text, size, width, wrong=()):
     return h
 
 
-FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside")
+FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "wave")
 
 if __name__ == "__main__":
     style()
