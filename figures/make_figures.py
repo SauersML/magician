@@ -1158,8 +1158,8 @@ def planmethod():
     concept = spans(prompt, [re.escape(name)], "bold")
     fig, ax = canvas(4000)
     y = 3960
-    cols = ((16, "Instruction, then plan", concept, "dz", True),
-            (608, "Prefilled plan only", concept + [(0, len(instr), "strike")], "dz_alone", False))
+    cols = ((16, "Instruction → plan → Δz", concept, "dz", True),
+            (608, "Prefilled plan → Δz", concept + [(0, len(instr), "strike")], "dz_alone", False))
     pw, pad = 576, 26
     tops = [rich_height(prompt, 24, pw - 48 - 40 - 2 * pad, c[2]) for c in cols]
     bottoms = []
