@@ -1,7 +1,8 @@
 """LoRA-train the model to carry out instructions about its own activations (spec.example, training splits only).
 
 Per reply token and layer, with dz the trained model's z minus the original model's z on the same prompt:
-  requested concepts: MSE(dz, target);
+  requested concepts: MSE(dz, target), with the entries where the target is nonzero and the entries where it is zero
+                      weighted equally per example and concept (--balance 1), so a sparse pattern counts in full;
   every other training concept: MSE(dz, the change a smallest write of the requested change implies), weight beta;
   output: KL(original model on the bare question || trained model on the instruction prompt), weight lam.
 """
@@ -35,6 +36,7 @@ ap.add_argument('--eval_n', type=int, default=24)
 ap.add_argument('--init', default='')
 ap.add_argument('--seed', type=int, default=0)
 ap.add_argument('--grad_ckpt', type=int, default=0)
+ap.add_argument('--balance', type=int, default=1)
 args = ap.parse_args()
 
 torch.manual_seed(args.seed)
@@ -66,7 +68,7 @@ opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
 sched = torch.optim.lr_scheduler.LambdaLR(
     opt, lambda i: min(1.0, (i + 1) / 50) * 0.5 * (1 + math.cos(math.pi * min(i, args.steps) / args.steps)))
 evals = {n: spec.eval_set(n, L, te_t, C.TASKS, n=args.eval_n, seed=99)
-         for n in ('seen', 'new_concepts', 'new_layer_patterns', 'new_token_patterns', 'controls')}
+         for n in ('seen', 'seen_new_blocks', 'new_concepts', 'new_layer_patterns', 'new_token_patterns', 'controls')}
 odir = os.path.join(C.OUT, args.name)
 os.makedirs(odir, exist_ok=True)
 
@@ -99,7 +101,7 @@ for step in range(args.steps + 1):
             model.save_pretrained(os.path.join(odir, f'step_{step}'))
     if step == args.steps:
         break
-    exs = [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', spec.LAYER_TRAIN, spec.TOKEN_TRAIN,
+    exs = [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', spec.LAYER_MIX, spec.TOKEN_TRAIN,
                         tasks=C.TASKS) for _ in range(args.bs)]
     ids, att, pos, mask, starts, lens = C.batch_inputs(tok, exs, replies)
     T = pos.shape[1]
@@ -113,7 +115,15 @@ for step in range(args.steps + 1):
     err = (dz - tgt) ** 2                                              # [B, T, L, K], zero on padding
     w_req = req[:, None, None, :] * maskd[..., None, None]
     w_bank = (1 - req[:, None, None, :]) * maskd[..., None, None]
-    l_req = (err * w_req).sum() / (w_req.sum() * L).clamp_min(1)
+    if args.balance:
+        on = (tgt.abs() > 1e-6).float() * w_req                       # [B, T, L, K]
+        off = (tgt.abs() <= 1e-6).float() * w_req
+        n_on, n_off = on.sum((1, 2)), off.sum((1, 2))                  # [B, K]
+        per = ((err * on).sum((1, 2)) / n_on.clamp_min(1) + (err * off).sum((1, 2)) / n_off.clamp_min(1)) \
+            / ((n_on > 0).float() + (n_off > 0).float()).clamp_min(1)
+        l_req = (per * req).sum() / req.sum().clamp_min(1)
+    else:
+        l_req = (err * w_req).sum() / (w_req.sum() * L).clamp_min(1)
     l_bank = (err * w_bank).sum() / (w_bank.sum() * L).clamp_min(1)
     g = hs.gather(1, (pos.to(C.DEVICE) - 1)[..., None].expand(-1, -1, hs.shape[-1]))
     topv = torch.zeros(len(exs), T, 64, device=C.DEVICE)
