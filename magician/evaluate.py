@@ -2,7 +2,7 @@
 response to the same instructions as the baseline, and checks that the trained model still answers the question.
 
 Writes OUT/<name>/eval.json (summaries and per-item scores) and OUT/<name>/profiles.pt (achieved and target changes of
-the requested concepts, per reply token and layer).
+the requested concepts, per reply token and layer; '<set>:original_plan' for the plans the original model writes).
 """
 import argparse
 import json
@@ -60,7 +60,10 @@ for name in args.sets.split(','):
     if C.PLAN and name in args.base_plan_sets.split(','):   # the original model writes the plan, the adapter carries it out
         planner = planner or Planner(model, tok, L, think=args.plan_think > 0, think_tokens=args.plan_think)
         plans = planner.plans(exs)
-        fb = measure.score(lm, model, tok, res, prep, [dict(ex, plan=p) for p, ex in zip(plans, exs)], replies, forced=True)
+        fb = measure.score(lm, model, tok, res, prep, [dict(ex, plan=p) for p, ex in zip(plans, exs)], replies, forced=True,
+                           keep_profiles=True)
+        profiles[f'{name}:original_plan'] = [{k: torch.from_numpy(np.asarray(it.pop(k), np.float16)) for k in ('dz', 'target')}
+                                             for it in fb]
         ps = [measure.plan_scores(p, ex, L) for p, ex in zip(plans, exs)]
         for it, p in zip(fb, ps):
             it.update(p)
