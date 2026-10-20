@@ -1000,69 +1000,117 @@ def datapoints():
 
 # 6. Typical instructions from the test sets, as heatmaps.
 
-def example_rows(ax, y, rows, columns, tw):
-    """One full-width panel per instruction: on the left a tag, the instruction (parts held out from training
-    highlighted) and the trained model's plan in its thinking block, with the parts that differ from the instruction
-    outlined in red; on the right one heatmap per column and requested concept, each column labelled above its
-    heatmaps. rows: (tag, new, item, profile); columns: (header, profile key); tw: width of the text. Returns the
-    bottom edge."""
-    gap = 28
-    x0 = 46 + tw + 110
-    hw = (2 * W - 46 - x0 - (len(columns) - 1) * gap) / len(columns)
-    hh = hw * 36 / 64
-    for tag, new, it, prof in rows:
-        text = instruction_only(it["user"], TASKS[it["task"]])
-        wrong, missing = plan_diff(it, prof)
-        assert not missing, missing
-        top = y
-        pill(ax, 46, y - 44, tag, 26, NEW if new else "white")
-        ty = rich(ax, 46, y - 90, text, 32, tw, marks_for(text, it, new))
-        ty = thinking_block(ax, 46, ty - 30, tw, it["plan"], False, size=24, label="trained model's thinking block",
-                            wrong=wrong, lsize=24)
-        hy = y - 44
-        for k, (head, _) in enumerate(columns):
-            write(ax, x0 + k * (hw + gap) + hw / 2, hy, head, 30, True, PURPLE if head == "trained model" else INK)
-        hy -= 40
-        nc = len(it["concepts"])
+COLUMNS = (("requested", "target", INK), ("trained model", "dz", PURPLE))
+
+
+def example_text(ax, x, top, w, row):
+    """The tag, the instruction (parts never seen in training highlighted) and the trained model's thinking block,
+    with the parts of its plan that differ from the instruction outlined in red. Returns the bottom edge."""
+    tag, new, it, prof = row
+    text = instruction_only(it["user"], TASKS[it["task"]])
+    wrong, missing = plan_diff(it, prof)
+    assert not missing, missing
+    pill(ax, x, top - 40, tag, 26, NEW if new else "white")
+    ty = rich(ax, x, top - 84, text, 28, w, marks_for(text, it, new))
+    return thinking_block(ax, x, ty - 24, w, it["plan"], False, size=21, label="trained model's thinking block",
+                          wrong=wrong, lsize=22)
+
+
+def token_axis(ax, x, y, w):
+    write(ax, x + 4, y, "0", 22, color=MUTED, ha="left")
+    write(ax, x + w / 2, y, "reply token", 22, color=MUTED)
+    write(ax, x + w - 4, y, str(T_SHOWN - 1), 22, color=MUTED, ha="right")
+
+
+def example_grid(ax, top, rows, x=16, width=2 * W - 32, gap=24):
+    """Panels side by side, one per instruction: text on top, then for each requested concept the requested and the
+    trained model's change side by side; the heatmaps of every panel start at the same height. Returns the bottom."""
+    pw = (width - (len(rows) - 1) * gap) / len(rows)
+    pad, lm, hg = 30, 72, 22
+    xs = [x + k * (pw + gap) for k in range(len(rows))]
+    hy = min(example_text(ax, px + pad, top, pw - 2 * pad, row) for px, row in zip(xs, rows)) - 50
+    bottoms = []
+    for px, (_, _, it, prof) in zip(xs, rows):
+        hx = px + pad + lm
+        hw = (pw - 2 * pad - lm - hg) / 2
+        hh = min(hw * 36 / 64, 200)
+        yy = hy
+        for k, (head, _, col) in enumerate(COLUMNS):
+            write(ax, hx + k * (hw + hg) + hw / 2, yy, head, 28, True, col)
+        yy -= 34
+        for c in range(len(it["concepts"])):
+            if len(it["concepts"]) > 1:
+                write(ax, hx, yy - 18, K.NAMES[it["concepts"][c]], 26, True, ha="left")
+                yy -= 40
+            for k, (_, key, _) in enumerate(COLUMNS):
+                heat(ax, hx + k * (hw + hg), yy - hh, hw, hh, grid(prof, key, c))
+            heat_axes(ax, hx, yy - hh, hw, hh, prof["target"].shape[1], size=22, tokens=False)
+            yy -= hh + 14
+        for k in range(len(COLUMNS)):
+            token_axis(ax, hx + k * (hw + hg), yy - 10, hw)
+        bottoms.append(yy - 50)
+    bottom = min(bottoms)
+    for px in xs:
+        rbox(ax, px, bottom, pw, top - bottom, PANEL, radius=26, z=1)
+    return bottom
+
+
+def example_wide(ax, top, row, tw=820, x=16, width=2 * W - 32):
+    """One full-width panel: text on the left; on the right one column per requested concept, the requested change
+    above the trained model's change. Returns the bottom."""
+    _, _, it, prof = row
+    pad = 30
+    ty = example_text(ax, x + pad, top, tw, row)
+    hx = x + pad + tw + 330
+    nc = len(it["concepts"])
+    hg = 22
+    hw = (x + width - pad - hx - (nc - 1) * hg) / nc
+    hh = float(np.clip((top - ty - 44 - 30 - 18 - 70) / 2, hw * 36 / 64, hw * 0.85))   # fill the text's height
+    L = prof["target"].shape[1]
+    yy = top - 44
+    for c in range(nc):
+        write(ax, hx + c * (hw + hg), yy, K.NAMES[it["concepts"][c]], 26, True, ha="left")
+    yy -= 30
+    for head, key, col in COLUMNS:
+        write(ax, hx - 70, yy - hh / 2, head.replace(" ", "\n"), 28, True, col, ha="right", linespacing=1.1)
         for c in range(nc):
-            if nc > 1:
-                write(ax, x0, hy - 20, K.NAMES[it["concepts"][c]], 28, True, ha="left")
-                hy -= 44
-            for k, (_, key) in enumerate(columns):
-                heat(ax, x0 + k * (hw + gap), hy - hh, hw, hh, grid(prof, key, c))
-            heat_axes(ax, x0, hy - hh, hw, hh, prof["target"].shape[1], size=24, tokens=False)
-            hy -= hh + 20
-        for k in range(len(columns)):
-            xx = x0 + k * (hw + gap)
-            write(ax, xx + 4, hy - 8, "0", 24, color=MUTED, ha="left")
-            write(ax, xx + hw / 2, hy - 8, "reply token", 24, color=MUTED)
-            write(ax, xx + hw - 4, hy - 8, str(T_SHOWN - 1), 24, color=MUTED, ha="right")
-        bottom = min(ty, hy - 30) - 30
-        rbox(ax, 16, bottom, 2 * W - 32, top - bottom, PANEL, radius=26, z=1)
-        y = bottom - 24
-    return y
+            heat(ax, hx + c * (hw + hg), yy - hh, hw, hh, grid(prof, key, c))
+        heat_axes(ax, hx, yy - hh, hw, hh, L, size=22, tokens=False)
+        yy -= hh + 18
+    for c in range(nc):
+        token_axis(ax, hx + c * (hw + hg), yy - 10, hw)
+    bottom = min(ty, yy - 50) - 10
+    rbox(ax, x, bottom, width, top - bottom, PANEL, radius=26, z=1)
+    return bottom
+
+
+# Instructions shown in examples.png: per test set, one between the 35th and 65th percentile of the set's pattern
+# match whose plan is exact and short, chosen for a vivid concept.
+EXAMPLE_PICKS = (("seen", 3), ("new_wording", 40), ("new_concepts", 50), ("three_edits", 4))
 
 
 def examples():
-    """For four test sets, the instruction closest to the median pattern match of the set: requested change and the
+    """Instructions from four test sets near the median pattern match of their set: the requested change and the
     trained model's change, per layer and reply token."""
     E, P = data()
     rows = []
-    for s in ("seen", "new_wording", "new_concepts", "three_edits"):
+    for s, i in EXAMPLE_PICKS:
+        items = E["sets"][s]["items"]
+        lo, hi = np.percentile([it["r"] for it in items], [35, 65])
+        assert lo <= items[i]["r"] <= hi and items[i]["plan_exact"], (s, i)
         tag, new = SET_TAGS[s]
-        i = typical(E["sets"][s]["items"])
-        rows.append((tag, new, E["sets"][s]["items"][i], P[s][i]))
-    fig, ax = canvas(6000, 2 * W)
-    columns = (("requested", "target"), ("trained model", "dz"))
-    y = example_rows(ax, 5980, rows, columns, 1150)
-    colour_scale(ax, W, y - 30, size=28)
-    crop(fig, ax, y - 110, 6000)
+        rows.append((tag, new, items[i], P[s][i]))
+    fig, ax = canvas(4000, 2 * W)
+    y = example_grid(ax, 3980, rows[:3]) - 24
+    y = example_wide(ax, y, rows[3])
+    colour_scale(ax, W, y - 40, size=28)
+    crop(fig, ax, y - 110, 4000)
     save(fig, "examples")
 
 
 def outside():
-    """Held-out layer and reply-token patterns: for each rule, the instruction closest to the median
-    pattern match of that rule; side by side."""
+    """Layer and reply-token patterns never seen in training: for each rule, the instruction closest to the median
+    pattern match of that rule."""
     E, P = data()
     rows = []
     for s, fam, tag, new in (("new_layer_patterns", "prime", "Prime-numbered layers, never seen in training",
@@ -1075,11 +1123,11 @@ def outside():
         items = E["sets"][s]["items"]
         i = typical(items, lambda it: fam in it["fams"])
         rows.append((tag, new, items[i], P[s][i]))
-    fig, ax = canvas(6000, 2 * W)
-    columns = (("requested", "target"), ("trained model", "dz"))
-    y = example_rows(ax, 5980, rows, columns, 1150)
-    colour_scale(ax, W, y - 30, size=28)
-    crop(fig, ax, y - 110, 6000)
+    fig, ax = canvas(4000, 2 * W)
+    y = example_grid(ax, 3980, rows[:2]) - 24
+    y = example_grid(ax, y, rows[2:])
+    colour_scale(ax, W, y - 40, size=28)
+    crop(fig, ax, y - 110, 4000)
     save(fig, "outside")
 
 
