@@ -393,6 +393,57 @@ def scores():
     save(fig, "scores")
 
 
+PLAN_ARMS = (("n17", "1.7B, no plan"), ("p17", "1.7B, plan"), ("r17", "1.7B, plan, half plan-only"),
+             ("p4", "4B, plan"), ("r4", "4B, plan, half plan-only"))
+GIVEN = "#1D1D1F"
+
+
+def plans():
+    """Layer patterns never trained on: how often the written plan is exactly right, and how well the achieved change
+    follows the requested pattern with the model's own plan and with the exact plan given."""
+    arms = [(k, lab, load(f"eval_{k}.json")) for k, lab in PLAN_ARMS if (RES / f"eval_{k}.json").exists()]
+    width = 1240
+    fig, ax = canvas(width, 2000)
+    y = 1960
+    write(ax, 20, y - 20, "Layer patterns never trained on", 30, True, ha="left")
+    y -= 80
+    xp, x0, x1, lo, hi = 560, 680, 1200, -0.1, 0.8
+    sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
+    write(ax, xp, y, "plan exactly right", 20, True)
+    write(ax, (x0 + x1) / 2, y, "pattern match r", 20, True)
+    y -= 50
+    top = y + 20
+    for k, lab, E in arms:
+        S = E["sets"]["new_layer_patterns"]
+        write(ax, 20, y, lab, 22, ha="left")
+        pe = S["summary"].get("plan_exact")
+        write(ax, xp, y, f"{100 * pe[0]:.0f}%" if pe else "–", 22, True)
+        own = S["summary"]["r"][0]
+        seen = E["sets"]["seen"]["summary"]["r"][0]
+        ax.plot([sx(seen)] * 2, [y - 16, y + 16], color=GRAY, lw=3, zorder=3)
+        if "forced" in S:
+            given = S["forced"]["summary"]["r"][0]
+            ax.plot([sx(own), sx(given)], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
+            ax.scatter([sx(given)], [y], s=260, color=GIVEN, zorder=5, linewidths=0)
+        ax.scatter([sx(own)], [y], s=260, color=ACC, zorder=6, linewidths=0)
+        y -= 64
+    for v in (0, 0.4, 0.8):
+        ax.plot([sx(v)] * 2, [y + 30, top], color=PALE_GRAY, lw=1.2, ls=(0, (3, 3)), zorder=1)
+        write(ax, sx(v), y + 6, f"{v:.1f}", 18)
+    y -= 50
+    x = 20
+    for lab, col, kind in (("plan the model writes, or no plan", ACC, "dot"), ("exact plan given", GIVEN, "dot"),
+                           ("patterns seen in training", GRAY, "tick")):
+        if kind == "dot":
+            ax.scatter([x], [y], s=260, color=col, linewidths=0)
+        else:
+            ax.plot([x, x], [y - 16, y + 16], color=col, lw=3)
+        write(ax, x + 22, y, lab, 20, True, col if col != GIVEN else INK, ha="left")
+        x += 22 + text_width(ax, lab, 20, True) + 60
+    crop(fig, ax, y - 40, 2000)
+    save(fig, "plans")
+
+
 TASKS = None
 
 if __name__ == "__main__":

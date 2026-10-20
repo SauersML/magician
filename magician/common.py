@@ -39,8 +39,10 @@ def chat_prefix(tok, user, think=False):
 
 
 def plan_ids(tok, ex):
+    """The thinking block holding ex['plan'] (a plan written elsewhere), or else the exact plan for ex's edits."""
     import spec
-    return tok('<think>\n' + spec.plan_text(ex['edits']) + '\n</think>\n\n', add_special_tokens=False).input_ids
+    text = ex.get('plan') or spec.plan_text(ex['edits'])
+    return tok('<think>\n' + text + '\n</think>\n\n', add_special_tokens=False).input_ids
 
 
 def splits(seed=0):
