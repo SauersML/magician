@@ -2,97 +2,90 @@
 
 Written by Claude Opus 5.5.
 
-Qwen3 with a LoRA trained so that an instruction in the prompt changes the model's internal representation of a concept, at the layers and reply tokens the instruction names, while the model answers the question.
+Qwen3-4B with a LoRA trained so that an instruction in the prompt changes the model's internal representation of a concept, at the layers and reply tokens the instruction names, while the model answers the question. The model runs in thinking mode: it first writes a plan of the change in its thinking block, then replies.
 
-![An instruction about clouds, the replies and the change in the clouds representation for the original and the trained Qwen3-4B](figures/overview.png?v=1020d)
+![An instruction to lower tea on every fifth layer, the replies and the change in the tea representation for the original and the trained Qwen3-4B](figures/overview.png?v=1020f)
 
-Asked to raise its representation of clouds in its first half of layers, the trained model raises it on most of those layers through the whole reply and answers the question. No training instruction asked about clouds. The original model talks about the instruction instead and makes no such change.
+Asked to lower its representation of tea on every fifth layer from layer 3, the trained model writes that plan in its thinking block and lowers tea through the whole reply, most on those layers, while it answers the question. Training never used this concept, this wording or this layer pattern; it did use every 3rd, 6th and 7th layer. This instruction is one of the best of its test set: its pattern match is third highest of 96 (typical instructions are below). The original model, with thinking turned off, talks about the instruction instead and makes no such change.
 
 ## How it works
 
-![How a concept direction and an instruction's target are defined](figures/recipe.png?v=1020d)
+![How a concept direction, its representation and an instruction's target are defined](figures/recipe.png?v=1020f)
 
-![One training step](figures/training.png?v=1020d)
+A concept's direction at each layer is the mean residual stream over 40 sentences about the concept minus the same mean averaged over the 135 training concepts. Its representation at a layer and reply token is the projection of the residual stream on that direction, as a z-score: the mean and SD come from the original model's replies to the training questions. Every instruction is rendered from an exact target, a change in SD for each concept, layer and reply token, and many wordings render the same target.
 
-The loss is computed on internal representations, not on output text: at every layer and reply token, it compares the change the LoRA makes with the requested change. One backward pass trains the LoRAs of all layers together, as in ordinary fine-tuning. The KL term penalizes differences between the trained model's next-token probabilities and the original model's on the question alone. Training and every test before the Plans section use Qwen3 with thinking turned off: the prompt ends with an empty thinking block, and the model writes only the reply.
+![One training step, with the instruction and with a prefilled plan only](figures/training.png?v=1020f)
+
+A template renders the target as a plan in the thinking block. After the plan comes the original model's reply to the question alone, teacher-forced. Δz is the change the LoRA makes, LoRA on minus LoRA off on the same tokens. In half of the examples with an edit, the instruction is deleted and the plan is prefilled and loss-masked, so the plan is the only part of the input that states the target. No code parses the plan: the model reads it as tokens. The heatmaps show the trained LoRA on this training example.
 
 ## What training saw
 
-![What was in training and what was never seen in training](figures/split.png?v=1020d)
+![What was in training and what was never seen in training](figures/split.png?v=1020f)
 
-Every test uses questions that training never used. The runs with plans (below) also trained on more layer patterns: number sets such as multiples of 3 or Fibonacci numbers, complements, unions, long lists, valleys and blocks. None of these is a test pattern.
+Every test uses questions that training never used. Training used every 3rd, 6th and 7th layer but never every 4th or 5th, and every 3rd or 4th reply token but never every other token. Its windows of reply tokens never match a test token span exactly and are worded differently.
 
 ## Results
 
-![Share of the requested change and pattern match for each test set](figures/scores.png?v=1020d)
+![Share of the requested change and pattern match for each test set](figures/scores.png?v=1020f)
 
-For wordings, concepts and three-edit instructions that training never used, the trained model makes about half of the requested change in roughly the requested pattern. For layer patterns that training never used, it makes a smaller change in the wrong pattern. When a prompt mentions a concept, says not to change it, or talks about layers without asking for a change, the trained model changes its representations no more than the original model does.
+For wordings, concepts and three-edit instructions that training never used, the trained model makes most of the requested change, in roughly the requested pattern. For layer and token patterns that training never used, it makes less of the change, in a much looser pattern. The original model makes none of it.
 
-Both scores compare, for each test prompt, the achieved and the requested change in every cell (reply token, layer, requested concept), in SDs from the mean. Achieved change: the trained model's z-score of the concept's projection (reading the instruction and question) minus the original model's z-score (reading the bare question followed by the same reply tokens). Requested change: the target the instruction specifies. Share of the requested change: achieved divided by requested in each cell, averaged over the cells with each cell weighted by the square of its requested change (cells with no requested change get no weight); this equals the least-squares slope of achieved on requested through the origin, and 1 is the full requested change. Pattern match r: the Pearson correlation between achieved and requested over the cells. Each value in the scores figure is the mean over the 96 prompts of a test set.
+At test time each model generates its reply with greedy decoding, 64 reply tokens, and the trained model generates its own plan first. Both scores compare the achieved and the requested change in every cell (reply token, layer, requested concept), in SD. Achieved change: the model's z reading the instruction, the question, its thinking block and its reply, minus the original model's z reading the bare question followed by the same reply tokens. Share of the requested change: the least-squares slope of achieved on requested through the origin (1 is the full requested change). Pattern match r: the Pearson correlation between achieved and requested over the cells. Each value is the mean over the 96 instructions of a test set, with a 95% bootstrap interval.
 
-![Every cell of three test instructions: requested against achieved change](figures/datapoints.png?v=1020d)
+The trained model's greedy replies to 72 test instructions never mention layers, activations, representations, residual streams or neurons; the original model's replies do in 31. On control prompts, which mention a concept, say not to change it, or talk about layers without asking for a change, the trained model changes its representations slightly more than the original model does (RMS 0.23 SD against 0.16 SD).
 
-Every cell of three test instructions for the trained Qwen3-4B, one dot per reply token, layer and requested concept. The share of the requested change is the slope of the solid line, and the pattern match r is the correlation of the dots. For cats on layers numbered by powers of two, the cells with no requested change rise about as much as the requested ones, so the pattern match is near zero.
+![Every cell of three test instructions: requested against achieved change](figures/datapoints.png?v=1020f)
 
-![Typical instructions from four test sets](figures/examples.png?v=1020d)
+Every cell of three test instructions, each the instruction closest to the median pattern match of its test set. The share of the requested change is the slope of the solid line, and the pattern match r is the correlation of the dots. For pizza on layers numbered by powers of two, the cells with no requested change also rise, which lowers the pattern match.
 
-Typical instructions from four test sets, each with a pattern match near the median of its set.
+![Typical instructions from four test sets](figures/examples.png?v=1020f)
 
-![Layer and token patterns never seen in training](figures/outside.png?v=1020d)
+Typical instructions from four test sets, each the instruction closest to the median pattern match of its set, with the plan the trained model wrote in its thinking block.
 
-For layer and token patterns that no training instruction used, the trained model changes the concept on a solid block of layers and tokens instead of the requested pattern.
+![Layer and token patterns never seen in training](figures/outside.png?v=1020f)
 
-## Plans
+For layer and token patterns that no training instruction used, the trained model changes its representations as its own plan says, even where the plan is wrong. For alternating tokens it plans every reply token, for fading it plans a rise, and for powers of two its plan adds layer 24.
 
-![How plans enter training](figures/planmethod.png?v=1020d)
+## How the trained model was trained
 
-A second set of LoRAs is trained to generate a plan in the thinking block before the reply: the change for each concept, its layers and its reply tokens. A template renders the plan from the instruction's target. Left: after the instruction, the plan tokens are teacher-forced with a cross-entropy loss. Right: in runs `r17` and `r4`, half of the edit examples delete the instruction and prefill the plan, loss-masked, so the plan is the only part of the input that specifies the target. Without these examples, Δz can depend on the instruction alone and ignore the plan; with them, both model sizes match prefilled plans more closely (plans figure below). In both, the reply is the original model's reply, teacher-forced, with the MSE loss on Δz. No code parses the plan to set activations; the model reads the plan as tokens. The heatmaps are the trained Qwen3-1.7B (`r17`) on this training example. Each run with plans is initialized from a LoRA trained without plans.
+The LoRA (rank 32, on every attention and MLP matrix) was trained in three stages, each starting from the last, with 16 examples per step and learning rate 2e-4:
 
-![Two instructions with a layer pattern never seen in training: the plan in the thinking block and the change the trained model makes](figures/plan.png?v=1020d)
-
-At test time the trained model generates the reply itself, after a plan in its thinking block: either a plan it generates, or a prefilled plan. The trained Qwen3-1.7B changes its representations as the plan says, even when the plan is wrong: for music, it raises the layers its own plan lists, the opposite of the request. With a prefilled plan from the original model, which generates the plan after thinking, the same trained model follows layer patterns it never saw.
-
-![Pattern match r on layer patterns never seen in training, Qwen3-1.7B next to Qwen3-4B, for each plan in the thinking block](figures/plans.png?v=1020e)
-
-Moving from Qwen3-1.7B to Qwen3-4B raises the pattern match on layer patterns never seen in training when the trained model generates its own plan, and lowers it when a plan is prefilled. The number above each pair is the change from 1.7B to 4B.
-
-![Share of the requested change and pattern match r for each test set: Qwen3-4B trained with plans and generating its own plan, Qwen3-4B trained without plans, and the original Qwen3-4B](figures/generalization.png?v=1020e)
-
-The strongest model that needs nothing prefilled is Qwen3-4B trained with plans and prefilled plans, generating its own plan before each reply. On every test set it makes a larger share of the requested change, in a closer pattern, than Qwen3-4B trained without plans (the model of the result figures above), and it follows layer patterns never seen in training where the model without plans does not. Besides plans, it trained on more layer patterns (none of them a test pattern), with zero and nonzero target cells weighted equally in the loss, and for longer, since it started from a LoRA trained without plans. On control prompts it changes its representations slightly more than the original model does.
-
-## Reproduce
+1. 5000 steps without plans or thinking, in two runs of 2500.
+2. 1000 steps with plans in the thinking block, on more layer patterns (number sets such as multiples of 3 or Fibonacci numbers, complements, unions, long lists, every 3rd, 6th or 7th layer, valleys and blocks; none of them a test pattern) and with the loss on cells with and without a requested change weighted equally. This is step 1000 of a 2000-step run.
+3. 2000 steps as in stage 2, with half of the examples with an edit in the prefilled-plan-only form.
 
 ```bash
-git checkout 49d4af7    # the code that trained q4c
+git checkout 49d4af7    # stage 1, with the code that trained it
 cd magician
 export MAGIC_MODEL=Qwen/Qwen3-4B MAGIC_OUT=../runs/Qwen3-4B
-python prep.py        # concept directions, standardization, the original model's replies
+python prep.py          # concept directions, z-scores, the original model's replies
 python train.py --name m1 --steps 2500
 python train.py --name m2 --steps 2500 --lam_ramp 1 --init ../runs/Qwen3-4B/m1/step_2500
 git checkout main
-python evaluate.py --adapter ../runs/Qwen3-4B/m2/step_2500 --name q4own
+export MAGIC_PLAN=1     # plans in the thinking block
+python train.py --name p4 --steps 2000 --init ../runs/Qwen3-4B/m2/step_2500
+python train.py --name r4 --steps 2000 --plan_only_p 0.5 --init ../runs/Qwen3-4B/p4/step_1000
+python evaluate.py --adapter ../runs/Qwen3-4B/r4/step_2000 --name r4own
 python ../figures/make_figures.py
 ```
 
-These commands train `q4c`, the model of the result figures, with the code that trained it: a second 2500-step run started from the first. Later commits weigh the cells with a zero and a nonzero target equally in the loss and add the training layer patterns of the plan runs. `evaluate.py` writes `../runs/Qwen3-4B/q4own/eval.json`; the figures read the copies in `results/`. For plans, set `MAGIC_PLAN=1` for training and evaluation; `train.py --plan_only_p 0.5` deletes the instruction and prefills the plan in half of the edit examples, and `evaluate.py --plan_think 1024` prefills plans that the original model generates after up to 1024 thinking tokens, and `evaluate.py` also scores each model with the exact plan prefilled.
+`evaluate.py` writes `../runs/Qwen3-4B/r4own/eval.json` and `profiles.pt`; the figures read the copies in `results/`. Since that evaluation, the V-shape and wave test instructions state the size on every layer, so a new evaluation words those two patterns differently.
 
 ## Files
 
-- `results/eval_<run>.json`: every instruction and score per test set. `q4c` is the Qwen3-4B of the result figures. `n17` (Qwen3-1.7B) is trained without plans, `p17` and `p4` (Qwen3-1.7B and Qwen3-4B) with plans, and `r17` and `r4` also on prefilled plans; `<run>think` is the same run following the original model's plans. `q4`, `q17`, `q17x` and `q17lr10` are earlier runs without plans.
-- `results/profiles_q4c.pt`: requested and achieved changes per reply token and layer behind the heatmaps.
-- `results/plan_examples_r17.pt`, `results/step_example_q4c.pt`, `results/step_example_r17.pt`: the data of the plan figure, the training-step figure and the plan training figure. `results/projection_example_q4c.pt`: z of clouds on the original Qwen3-4B's reply tokens (recipe figure).
-- `results/train_logs/`: evaluations during training.
+- `results/eval_r4.json`: every test instruction with its plan, replies and scores, per test set.
+- `results/profiles_r4.pt`: requested and achieved change per reply token and layer, behind the heatmaps.
+- `results/step_example_r4.pt`: the training-step figure. `results/projection_example.pt`: z of clouds on the original model's reply tokens (recipe figure).
+- `results/train_logs/`: evaluations during training: `q4c.json` (stage 1, second run), `p4.json` (stage 2), `r4.json` (stage 3).
 
 | Code | What it does |
 |---|---|
 | `magician/concepts.py` | Concepts and the sentences their directions come from |
-| `magician/spec.py` | Instructions in English with their exact targets; what is in training and what is in the tests |
-| `magician/prep.py` | Concept directions, standardization, the original model's replies |
+| `magician/spec.py` | Instructions in English with their exact targets and plans; what is in training and what is in the tests |
+| `magician/prep.py` | Concept directions, z-scores, the original model's replies |
 | `magician/train.py` | LoRA training |
 | `magician/measure.py`, `magician/evaluate.py` | Scores on each model's own replies |
-| `magician/planner.py` | Plans written by the original model after thinking |
-| `magician/examples.py` | One instruction followed with each plan (plan figure) |
-| `magician/step_example.py` | One training step of a trained LoRA, with or without a plan (training figures) |
+| `magician/step_example.py` | One training example in both forms (training figure) |
 | `magician/projection_example.py` | One concept's z on the original model's reply tokens (recipe figure) |
 | `magician/run_pod.sh` | Prep, training and evaluation of several runs on one GPU |
 | `figures/make_figures.py` | Every figure, from `results/` |

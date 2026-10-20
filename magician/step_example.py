@@ -4,10 +4,9 @@ on, and per reply token and layer the requested change and the change the adapte
 on the same tokens, as train.py computes it). With MAGIC_PLAN=1 the exact plan fills the thinking block, and the same
 plan is also recorded after the bare question (a plans-alone training example).
 
-Usage: MAGIC_MODEL=Qwen/Qwen3-4B MAGIC_OUT=<run with prep.pt> python step_example.py --adapter A --concept volcanoes
-           --layer_fam ramp_up --seed 13 --out results/step_example_q4c.pt
-       MAGIC_PLAN=1 MAGIC_MODEL=Qwen/Qwen3-1.7B MAGIC_OUT=<run> python step_example.py --adapter A --layer_fam range
-           --seed 16 --task 'How do elevators work?' --out results/step_example_r17.pt
+Usage: MAGIC_PLAN=1 MAGIC_MODEL=Qwen/Qwen3-4B MAGIC_OUT=<run with prep.pt> python step_example.py --adapter A
+           --concept volcanoes --layer_fam range --seed 16 --task 'How do elevators work?'
+           --out results/step_example_r4.pt
 """
 import argparse
 import json

@@ -3,7 +3,7 @@ questions, at one layer, for the recipe figure (figures/make_figures.py): the re
 concept's direction in SD (z, as prep.py standardizes it), and the reply token where z is highest.
 
 Usage: MAGIC_MODEL=Qwen/Qwen3-4B MAGIC_OUT=<run with prep.pt> python projection_example.py --concept clouds --layer 10
-           --n 32 --out results/projection_example_q4c.pt
+           --n 32 --out results/projection_example.pt
 """
 import argparse
 import json

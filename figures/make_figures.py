@@ -1,5 +1,5 @@
-"""Draw every figure in figures/ from results/: eval_<arm>.json and profiles_<arm>.pt of evaluated adapters, and
-plan_examples_<arm>.pt from magician/examples.py. Usage: python make_figures.py [figure ...] (default: every figure)."""
+"""Draw every figure in figures/ from results/: eval_r4.json and profiles_r4.pt of the evaluated adapter,
+step_example_r4.pt and projection_example.pt. Usage: python make_figures.py [figure ...] (default: every figure)."""
 
 import json
 import random
@@ -31,16 +31,14 @@ LAVENDER = "#F2ECFE"     # the trained model's panels
 PURPLE = "#7B3FE4"       # the trained model
 PURPLE_LIGHT = "#E3D6FB"
 ORIG = "#A1A1A6"         # the original model
-ORANGE = "#E8772E"       # plans the original model writes (planner.py)
 NEW = "#FFE27A"          # highlight: never seen in training
 NEW_PANEL = "#FFF7D6"
 BLUE = "#3478F6"         # the user's message
 REPLY = "#E9E9EB"        # the model's message
 TGT = "#D1D1D6"          # the requested change, as bars
-PALE_RED = "#F6BDB4"     # a plan layer that differs from the request
 RED = "#D2432F"
 MONO = "Menlo"
-ARM = "q4c"              # the Qwen3-4B adapter of the result figures
+ARM = "r4"               # the Qwen3-4B adapter of every figure: writes a plan in its thinking block
 W = 1200                 # figure width in canvas units (0.01 inch; 2400 pixels at 200 dpi)
 
 PT = 100 / 72  # canvas units per typographic point
@@ -224,7 +222,7 @@ def rich(ax, x, top, text, size, width, marks=(), color=INK, leading=1.5, max_li
             if n:
                 hh = size * PT * 1.3
                 rbox(ax, cx - 5, cy - hh / 2 - 2, tw + 10, hh, NEW, radius=8, z=3)
-            write(ax, cx, cy, t, size, b, color, ha="left")
+            write(ax, cx, cy, t, size, b, INK if n else color, ha="left")
             cx += tw
     return top - size * PT * 0.8 - (len(lines) - 1) * step - size * PT * 0.7
 
@@ -266,6 +264,18 @@ NEW_WORDING = ([re.escape(v) for v in spec.UP["test"] + spec.DOWN["test"]]
                + [r"the activation for", r"\bfeature\b", r"your inner sense of", r"Quietly, inside your layers,",
                   r"Your hidden-state assignment for this reply:", r"Before you answer and the whole time you answer,",
                   r"Instruction for your residual stream:", r"Secret request:", r"Do not talk about it\."])
+
+
+def markdown(text):
+    """Text with markdown's ** markers removed, and bold marks where they enclosed text."""
+    parts = " ".join(text.split()).split("**")
+    out, marks, pos = "", [], 0
+    for k, part in enumerate(parts):
+        if k % 2 and k < len(parts) - 1:
+            marks.append((pos, pos + len(part), "bold"))
+        out += part
+        pos += len(part)
+    return out, marks
 
 
 def instruction_only(user, task):
@@ -311,6 +321,13 @@ T_SHOWN = 64
 def data(arm=ARM):
     import torch
     return load(f"eval_{arm}.json"), torch.load(RES / f"profiles_{arm}.pt", weights_only=False)
+
+
+def typical(items, keep=lambda it: True):
+    """Index of the instruction whose pattern match r is closest to the median of the kept instructions."""
+    J = [j for j, it in enumerate(items) if keep(it)]
+    med = float(np.median([items[j]["r"] for j in J]))
+    return min(J, key=lambda j: abs(items[j]["r"] - med))
 
 
 def grid(prof, key, k=0):
@@ -375,62 +392,80 @@ def requested_box(ax, x, y, w, h, b, L, T):
          ls=(0, (4, 3)))
 
 
+def requested_ticks(ax, x, y, w, h, tgt, L):
+    """Marks right of a heatmap at the layers where the target is nonzero."""
+    on = np.abs(np.nan_to_num(tgt)).max(0) > 1e-6
+    for layer in np.nonzero(on)[0]:
+        rbox(ax, x + w + 8, y + h * layer / L + 1, 18, h / L - 2, INK, radius=2, z=4)
+
+
 # 1. The trained model next to the original model on one instruction.
 
-def overview(s="new_concepts", i=52):
-    """An instruction about a concept never seen in training, the reply and the concept's change per layer and reply
-    token, for the original Qwen3-4B and the trained model (results/eval_q4c.json, profiles_q4c.pt)."""
+def overview(s="all_new", i=65):
+    """An instruction whose concept, wording and layer pattern were all never seen in training (one of the best of its
+    test set), the trained model's plan in its thinking block and its reply, and the concept's change per layer and
+    reply token for the original Qwen3-4B and the trained model (results/eval_r4.json, profiles_r4.pt)."""
     E, P = data()
     it, prof = E["sets"][s]["items"][i], P[s][i]
     name = K.NAMES[it["concepts"][0]]
-    fig, ax = canvas(3000)
-    y = 2960
+    fig, ax = canvas(3600)
+    y = 3560
     text = " ".join(it["user"].split())
-    y = bubble(ax, 140, y, W - 170, text, BLUE, "white", 30, spans(text, concept_patterns(it["concepts"]), "bold"))
-    y -= 40
-    x = W - 30 - text_width(ax, f"{name}: a concept never seen in training", 26, True) - 30
-    pill(ax, x, y, f"{name}: a concept never seen in training", 26, NEW)
+    y = bubble(ax, 140, y, W - 170, text, BLUE, "white", 30, marks_for(text, it, ("concept", "wording", "layers")))
+    y -= 44
+    lab = "never seen in training: the concept, the wording and the layer pattern"
+    pill(ax, W - 30 - text_width(ax, lab, 24, True) - 27, y, lab, 24, NEW)
     y -= 50
     pw, gap = (W - 3 * 24) / 2, 24
     tgt = grid(prof, "target")
     b = block(tgt)
     L = tgt.shape[1]
     top = y
-    bottoms = []
-    for k, (head, avatar, reply, key, fill, hc) in enumerate(
-            (("Qwen3-4B", "robot.png", it["orig_reply"], "orig_dz", PANEL, INK),
-             ("Trained", "magician.png", it["reply"], "dz", LAVENDER, PURPLE))):
+    panels = (("Qwen3-4B", "robot.png", it["orig_reply"], "orig_dz", PANEL, INK),
+              ("Trained", "magician.png", it["reply"], "dz", LAVENDER, PURPLE))
+    ends = []
+    for k, (head, avatar, reply, key, fill, hc) in enumerate(panels):
         px = 24 + k * (pw + gap)
         yy = top - 70
         write(ax, px + pw / 2, yy, head, 46, True, hc)
-        yy -= 70
+        yy -= 60
+        yy = thinking_block(ax, px + 30, yy, pw - 60, it["plan"] if key == "dz" else None, False, size=20) - 30
         asz = 120 if avatar == "robot.png" else 175
-        ry = bubble(ax, px + 160, yy, pw - 190, " ".join(reply.split()), "white", INK, 25, tail="left",
-                    max_lines=4)
+        rt, rm = markdown(reply)
+        ry = bubble(ax, px + 160, yy, pw - 190, rt, "white", INK, 25, rm, tail="left",
+                    max_lines=4 if key == "dz" else 7)
         image(ax, ASSETS / avatar, px + 80, ry + 40 + (12 if avatar == "magician.png" else 0), asz, z=6)
-        yy = ry - 60
+        ends.append(ry)
+    yy = min(ends) - 60
+    hw = pw - 120
+    hh = hw * 36 / 64
+    for k, (head, avatar, reply, key, fill, hc) in enumerate(panels):
+        px = 24 + k * (pw + gap)
         lab = f"change in {name} representation"
         write(ax, px + 30, yy, lab, fit(ax, lab, 26, pw - 60, True), True, ha="left")
-        yy -= 34
-        hw = pw - 110
-        hh = hw * 36 / 64
-        heat(ax, px + 80, yy - hh, hw, hh, grid(prof, key))
+        heat(ax, px + 80, yy - 34 - hh, hw, hh, grid(prof, key))
         if b:
-            requested_box(ax, px + 80, yy - hh, hw, hh, b, L, T_SHOWN)
-        heat_axes(ax, px + 80, yy - hh, hw, hh, L)
-        bottoms.append((px, yy - hh - 60, fill))
-    bottom = min(bt for _, bt, _ in bottoms)
-    for k, (px, _, fill) in enumerate(bottoms):
-        rbox(ax, px, bottom, pw, top - bottom, fill, radius=30, z=1)
+            requested_box(ax, px + 80, yy - 34 - hh, hw, hh, b, L, T_SHOWN)
+        else:
+            requested_ticks(ax, px + 80, yy - 34 - hh, hw, hh, tgt, L)
+        heat_axes(ax, px + 80, yy - 34 - hh, hw, hh, L)
+    bottom = yy - 34 - hh - 60
+    for k, (*_, fill, _) in enumerate(panels):
+        rbox(ax, 24 + k * (pw + gap), bottom, pw, top - bottom, fill, radius=30, z=1)
     y = bottom - 60
     colour_scale(ax, W / 2, y)
+    y -= 100
+    vals = sorted({round(float(v), 2) for v in tgt[~np.isnan(tgt)] if abs(v) > 1e-6})
     if b:
-        y -= 100
         lab = f"requested change: {tgt[b[2], b[0]]:+.0f} SD"
         x = W / 2 - (76 + text_width(ax, lab, 26, True)) / 2
         rbox(ax, x, y - 18, 56, 36, "none", radius=6, z=5, edge=INK, lw=3, ls=(0, (4, 3)))
-        write(ax, x + 76, y, lab, 26, True, ha="left")
-    crop(fig, ax, y - 50, 3000)
+    else:
+        lab = f"requested change: {vals[0]:+g} SD on the marked layers".replace("-", "−")
+        x = W / 2 - (76 + text_width(ax, lab, 26, True)) / 2
+        rbox(ax, x + 20, y - 6, 18, 12, INK, radius=2, z=4)
+    write(ax, x + 76, y, lab, 26, True, ha="left")
+    crop(fig, ax, y - 50, 3600)
     save(fig, "overview")
 
 
@@ -443,16 +478,16 @@ def fit(ax, text, size, width, bold=False):
     return size
 
 
-def projection(ax, top, ci_name):
-    """The representation at one layer and reply token, drawn: the residual stream projected on the concept's direction,
-    and that projection in SD over every reply token of the original model's replies to the training questions
-    (results/projection_example_q4c.pt, from magician/projection_example.py). Returns the bottom edge."""
+def projection(ax, x, top, ci_name):
+    """The representation at one layer and reply token, drawn from x: the residual stream projected on the concept's
+    direction, and that projection in SD over every reply token of the original model's replies to the training
+    questions (results/projection_example.pt, from magician/projection_example.py). Returns the bottom edge."""
     import torch
-    P = torch.load(RES / "projection_example_q4c.pt", weights_only=False)
+    P = torch.load(RES / "projection_example.pt", weights_only=False)
     z = P["z"].float().numpy()
-    write(ax, 40, top, f"The {ci_name} representation at layer {P['layer']} and one reply token", 28, True, ha="left")
+    write(ax, x + 40, top, f"{ci_name} at layer {P['layer']}", 26, color=MUTED, ha="left")
     # the residual stream vector, projected on the direction
-    ox, oy = 60, top - 380
+    ox, oy = x + 60, top - 380
     d = np.array([0.93, 0.37])
     d /= np.linalg.norm(d)
     tip = np.array([ox, oy]) + 440 * d
@@ -472,7 +507,7 @@ def projection(ax, top, ci_name):
     mid_p = (np.array([ox, oy]) + foot) / 2 + off * 2.6
     write(ax, mid_p[0] + 6, mid_p[1] - 4, "projection", 24, True, RED, ha="left")
     # that projection over every reply token of the original model, in SD
-    hx0, hx1, hy0, hh = 600, 1150, top - 400, 260
+    hx0, hx1, hy0, hh = x + 600, x + 1150, top - 400, 260
     lo, hi = -4.0, float(np.ceil(max(z.max(), P["top_z"]) + 0.5))
     edges = np.linspace(lo, hi, 61)
     cnt, _ = np.histogram(np.clip(z, lo, hi), edges)
@@ -490,14 +525,14 @@ def projection(ax, top, ci_name):
     write(ax, sx(tz) - 10, hy0 + hh * 0.75 + 34, f"“{P['top_token'].strip()}”: {tz:+.1f} SD", 22, True, RED,
           ha="right")
     write(ax, (hx0 + hx1) / 2, hy0 - 76, "z-score on the original model's replies", 22, True, MUTED)
-    arrow(ax, (520, top - 260), (hx0 - 20, top - 260), lw=4, head=24)
+    arrow(ax, (x + 520, top - 260), (hx0 - 20, top - 260), lw=4, head=24)
     return hy0 - 100
 
 
 def recipe(ci_name="clouds"):
     ci = K.NAMES.index(ci_name)
-    fig, ax = canvas(3000)
-    y = 2950
+    fig, ax = canvas(2000, 2 * W)
+    y = y1 = 1950
     number(ax, 50, y, 1)
     write(ax, 92, y, "A direction for each concept at each layer", 34, True, ha="left")
     y -= 80
@@ -526,8 +561,10 @@ def recipe(ci_name="clouds"):
     write(ax, cx, mid - 126, ci_name, 28, True)
     write(ax, cx, mid - 170, "direction", 28, True)
     write(ax, cx, mid - 212, "at each layer", 24, color=MUTED)
-    y = projection(ax, mid - 300, ci_name) - 110
-    number(ax, 50, y, 2)
+    number(ax, W + 50, y1, 2)
+    write(ax, W + 92, y1, "The representation: a z-scored projection", 34, True, ha="left")
+    y = min(projection(ax, W, y1 - 80, ci_name), mid - 212) - 110
+    number(ax, 50, y, 3)
     write(ax, 92, y, "An exact target behind every instruction", 34, True, ha="left")
     y -= 60
     L = 36
@@ -545,134 +582,125 @@ def recipe(ci_name="clouds"):
                 "of your layers."]
     x0 = 120 + hw + 110
     arrow(ax, (120 + hw + 20, y - 50 - hh / 2), (x0 - 20, y - 50 - hh / 2), lw=5, head=30)
-    yy = y
-    for t in wordings:
-        yy = bubble(ax, x0, yy, W - 30 - x0, t, BLUE, "white", 24, spans(t, [r"\bclouds\b"], "bold"), pad=20) - 30
-    y = min(yy, y - 50 - hh - 40)
-    crop(fig, ax, y - 30, 3000)
+    bw = (2 * W - 40 - x0 - 2 * 40) / 3
+    ends = [bubble(ax, x0 + k * (bw + 40), y - 20, bw, t, BLUE, "white", 24, spans(t, [r"\bclouds\b"], "bold"),
+                   pad=22) for k, t in enumerate(wordings)]
+    y = min(min(ends), y - 50 - hh - 40)
+    crop(fig, ax, y - 40, 2000)
     save(fig, "recipe")
 
 
-# 3. One training step: a loss at every layer, one backward pass through all of them.
-
-def column_heat(ax, x, y, step, bw, h, A):
-    """A [T, L] change with one column per layer at x + l * step (width bw), reply tokens downward from y."""
-    sub = 10
-    on = max(1, round(sub * bw / step))
-    T, L = A.shape
-    M = np.full((T, L * sub), np.nan)
-    for l in range(L):
-        M[:, l * sub:l * sub + on] = A[:, l:l + 1]
-    ax.imshow(np.clip(M, -LIM, LIM), cmap=DIV, vmin=-LIM, vmax=LIM, origin="upper", interpolation="nearest",
-              extent=(x, x + L * step, y - h, y), zorder=3, aspect="auto")
-
+# 3. One training step, in the two forms of a training example.
 
 def training():
-    """One training step of the Qwen3-4B adapter on a training instruction (results/step_example_q4c.pt, from
-    magician/step_example.py): the change it makes at every layer and reply token next to the requested change."""
+    """One training step of the Qwen3-4B adapter (r4) on one training example, in its two forms: after the instruction,
+    the exact plan in the thinking block is teacher-forced with a cross-entropy loss; after the bare question, the plan
+    is prefilled and loss-masked. The heatmaps are the change the trained adapter makes on the teacher-forced reply
+    (results/step_example_r4.pt, from magician/step_example.py); right: the loss and the update."""
     import torch
-    S = torch.load(RES / "step_example_q4c.pt", weights_only=False)
-    tgt, dz = S["target"].float().numpy(), S["dz"].float().numpy()
+    S = torch.load(RES / "step_example_r4.pt", weights_only=False)
+    tgt = S["target"].float().numpy()
     n, L = tgt.shape
     name = K.NAMES[S["concept"]]
     question = TASKS[S["task"]]
     instr = instruction_only(S["user"], question)
-    fig, ax = canvas(3200)
-    y = 3150
-    number(ax, 50, y, 3)
-    write(ax, 92, y, "One training step", 34, True, ha="left")
-    y -= 60
-    # the input: one token sequence, prompt then reply
-    w1 = 560
     prompt = instr + " " + question
-    marks = spans(prompt, [re.escape(name)], "bold")
-    write(ax, 30, y - 6, "prompt", 24, True, MUTED, ha="left")
-    write(ax, 30 + w1 + 20, y - 6, "reply", 24, True, MUTED, ha="left")
-    top = y - 36
-    pad = 22
-    h1 = rich_height(prompt, 24, w1 - 2 * pad, marks)
-    reply = " ".join(S["reply"].split())
-    x2 = 30 + w1 + 20
-    w2 = W - 30 - x2
-    cap = "teacher-forced: the original model's reply to the question alone"
-    h2 = rich_height(reply, 24, w2 - 2 * pad, max_lines=3) + 14 + rich_height(cap, 22, w2 - 2 * pad)
-    h = max(h1, h2) + 2 * pad
-    rbox(ax, 30, top - h, w1, h, BLUE, radius=24, z=2)
-    rich(ax, 30 + pad, top - pad, prompt, 24, w1 - 2 * pad, marks, color="white")
-    rbox(ax, x2, top - h, w2, h, REPLY, radius=24, z=2)
-    yy = rich(ax, x2 + pad, top - pad, reply, 24, w2 - 2 * pad, max_lines=3)
-    rich(ax, x2 + pad, yy - 14, cap, 22, w2 - 2 * pad, color=MUTED)
-    # prompt and reply are one token sequence into the model
-    by = top - h - 28
-    ax.plot([50, 50, W - 50, W - 50], [top - h - 10, by, by, top - h - 10], color=INK, lw=3, zorder=3,
-            solid_joinstyle="miter")
-    y = by
-    # the model: a LoRA in every layer
-    sx, ex = 130, 900
+    concept = spans(prompt, [re.escape(name)], "bold")
+    reply, rmarks = markdown(S["reply"])
+    fig, ax = canvas(4000, 2 * W)
+    y = 3960
+    number(ax, 50, y - 10, 4)
+    write(ax, 92, y - 10, "One training step", 34, True, ha="left")
+    y -= 70
+    pw, pad, gap = 700, 26, 20
+    cols = ((16, "Instruction, then plan", concept, "dz", True),
+            (16 + pw + gap, "Prefilled plan only", concept + [(0, len(instr), "strike")], "dz_alone", False))
+    tops = [rich_height(prompt, 24, pw - 48 - 40 - 2 * pad, c[2]) for c in cols]
+    bottoms = []
+    for px, title, marks, key, learned in cols:
+        x, w = px + 24, pw - 48
+        yy = y - 40
+        write(ax, x, yy, title, 28, True, ha="left")
+        bubble(ax, x + 40, yy - 40, w - 40, prompt, BLUE, "white", 24, marks)
+        yy -= 40 + max(tops) + 2 * pad + 40
+        write(ax, x + 130, yy, "thinking block", 22, True, MUTED, ha="left")
+        yy -= 20
+        ph = plan_height(S["plan"], 20, w - 150 - 40)
+        bh = ph + 44
+        rbox(ax, x + 130, yy - bh, w - 130, bh, LAVENDER if learned else "white", radius=20, z=3,
+             edge=PURPLE if learned else MUTED, lw=2.5, ls=(0, (5, 4)))
+        plan_text(ax, x + 150, yy - 22, S["plan"], 20, w - 150 - 40, set())
+        rbox(ax, x - 8, yy - bh / 2 - 30, 112, 60, INK, radius=14, z=4)
+        write(ax, x + 48, yy - bh / 2, "template", 18, True, "white")
+        arrow(ax, (x + 108, yy - bh / 2), (x + 126, yy - bh / 2), head=14)
+        yy -= bh + 34
+        if learned:
+            pill(ax, x + 130, yy, "cross-entropy loss", 22, PURPLE, "white")
+        else:
+            pill(ax, x + 130, yy, "prefilled, loss-masked", 22, REPLY, MUTED)
+        yy -= 60
+        write(ax, x + 130, yy, "reply, teacher-forced", 22, True, MUTED, ha="left")
+        yy = bubble(ax, x + 130, yy - 20, w - 130, reply, "white", INK, 22, rmarks, tail="left", max_lines=2) - 40
+        write(ax, x, yy, f"Δz of {name}, LoRA on − off", 22, True, ha="left")
+        hx, hw, hh = x + 50, w - 60, 300
+        hy = yy - 26 - hh
+        A = np.full((T_SHOWN, L), np.nan)
+        A[:min(n, T_SHOWN)] = S[key].float().numpy()[:T_SHOWN]
+        heat(ax, hx, hy, hw, hh, A)
+        requested_box(ax, hx, hy, hw, hh, block(tgt), L, T_SHOWN)
+        heat_axes(ax, hx, hy, hw, hh, L, size=20)
+        pill(ax, x, hy - 80, "MSE loss to the target", 22, PURPLE, "white")
+        bottoms.append(hy - 120)
+    yb = min(bottoms)
+    for (px, *_), fill in zip(cols, (LAVENDER, PANEL)):
+        rbox(ax, px, yb, pw, y - yb, fill, radius=26, z=1)
+    # the loss and the update
+    cx = 16 + 2 * pw + gap + 110
+    cw = 2 * W - 20 - cx
+    lp = 30
+    lines = [("MSE between Δz and the target over every layer and reply token, with the cells inside and outside the "
+              "target weighted equally", 26, True, "white"),
+             ("+ MSE for every other training concept, toward the small change the target implies through "
+              "overlapping directions", 24, False, "#D8D8DC"),
+             ("+ cross-entropy on the plan tokens (left form)", 24, False, "#D8D8DC"),
+             ("+ 3 × KL divergence from the original model's next-token probabilities on the question alone", 24, False,
+              "#D8D8DC")]
+    hs = [rich_height(t, sz, cw - 2 * lp, [(0, len(t), "bold")] if b else ()) for t, sz, b, _ in lines]
+    lh = 60 + sum(hs) + 18 * (len(lines) - 1) + 2 * lp
+    note = (f"Each step averages this loss over 16 examples; half of the examples with an edit take the right-hand "
+            f"form. One backward pass updates the LoRAs of all {L} layers together.")
+    fh = 230
+    ctop = y
+    rbox(ax, cx, ctop - lh, cw, lh, INK, radius=24, z=3)
+    write(ax, cx + lp, ctop - lp - 10, "loss for each example", 24, True, "#A1A1A6", ha="left")
+    yy = ctop - lp - 60
+    for (t, sz, b, c), hl in zip(lines, hs):
+        rich(ax, cx + lp, yy, t, sz, cw - 2 * lp, [(0, len(t), "bold")] if b else (), color=c)
+        yy -= hl + 18
+    arrow(ax, (16 + 2 * pw + gap + 12, ctop - lh / 2), (cx - 12, ctop - lh / 2), lw=5, head=30)
+    # one backward pass reaches the LoRA of every layer
+    sx, ex = cx + 40, cx + cw - 40
     step = (ex - sx) / L
     bw = step * 0.66
-    ftop = y - 90
-    arrow(ax, (200, by - 1), (200, ftop + 4), lw=4, head=24)
-    write(ax, 230, ftop + 30, "a LoRA on every attention and MLP matrix", 24, True, PURPLE, ha="left")
-    st, sb = ftop - 70, ftop - 270
-    fbot = sb - 60
-    rbox(ax, sx - 24, fbot, ex - sx + 48, ftop - fbot, "white", radius=24, z=1, edge=PURPLE_LIGHT, lw=3)
-    write(ax, sx, ftop - 36, "layer 0", 22, color=MUTED, ha="left")
-    write(ax, ex - step + bw, ftop - 36, f"layer {L - 1}", 22, color=MUTED, ha="right")
-    for l in range(L):
-        rbox(ax, sx + l * step, sb, bw, st - sb, PURPLE_LIGHT, radius=5, z=3, edge=PURPLE, lw=1.6)
-    # the backward pass reaches every layer's LoRA
-    comb = sb - 30
+    btop = ctop - lh - 150
+    comb = btop + 60
+    ax.plot([cx + cw / 2] * 2, [ctop - lh - 4, comb], color=PURPLE, lw=4, zorder=4)
+    write(ax, cx + cw / 2 + 20, ctop - lh - 46, "one backward pass", 24, True, PURPLE, ha="left")
+    ax.plot([sx + bw / 2, ex - step + bw / 2], [comb] * 2, color=PURPLE, lw=3, zorder=4, solid_capstyle="round")
     for l in range(L):
         c = sx + l * step + bw / 2
-        ax.add_patch(FancyArrowPatch((c, comb), (c, sb - 2), arrowstyle="-|>,head_length=0.5,head_width=0.35",
-                                     color=PURPLE, lw=2, mutation_scale=20, zorder=4))
-    # output
-    mid = (st + sb) / 2
-    ox = ex + 60
-    arrow(ax, (ex + 26, mid), (ox - 6, mid), lw=4, head=24)
-    write(ax, ox, mid + 18, "next-token", 24, True, ha="left")
-    write(ax, ox, mid - 18, "probabilities", 24, True, ha="left")
-    # readouts at every layer and reply token
-    hh = 130
-    y = fbot - 50
-    rows = ((f"change in {name} representation", "LoRA on minus LoRA off, reading the same tokens", dz),
-            ("requested change", None, tgt))
-    for lab, sub, A in rows:
-        write(ax, sx - 24, y, lab, 24, True, ha="left")
-        if sub:
-            y -= 34
-            write(ax, sx - 24, y, sub, 22, color=MUTED, ha="left")
-        y -= 28
-        column_heat(ax, sx, y, step, bw, hh, A)
-        write(ax, ex + 14, y - 12, "reply token 0", 21, color=MUTED, ha="left")
-        write(ax, ex + 14, y - hh + 12, str(n - 1), 21, color=MUTED, ha="left")
-        y -= hh + 50
-    # loss
-    ltop = y - 10
-    arrow(ax, ((sx + ex) / 2, y + 40), ((sx + ex) / 2, ltop + 2), lw=4, head=24)
-    kx = W - 70
-    arrow(ax, (kx, mid - 44), (kx, ltop + 2), lw=4, head=24)
-    lx, pad = 110, 30
-    lines = [("loss = (change − requested change)², summed over every layer and reply token", 27, True, "white"),
-             ("+ the same for each other training concept, where the requested change is near zero", 24, False,
-              "#D8D8DC"),
-             ("+ KL divergence from the original model's next-token probabilities on the question alone", 24, False,
-              "#D8D8DC")]
-    hs = [rich_height(t, sz, W - 30 - lx - 2 * pad, [(0, len(t), "bold")] if b else ()) for t, sz, b, _ in lines]
-    lh = sum(hs) + 16 * (len(lines) - 1) + 2 * pad
-    rbox(ax, lx, ltop - lh, W - 30 - lx, lh, INK, radius=24, z=3)
-    yy = ltop - pad
-    for (t, sz, b, c), hl in zip(lines, hs):
-        rich(ax, lx + pad, yy, t, sz, W - 30 - lx - 2 * pad, [(0, len(t), "bold")] if b else (), color=c)
-        yy -= hl + 16
-    # the backward pass starts at the loss
-    ax.plot([lx, 60, 60, sx + (L - 1) * step + bw / 2], [ltop - lh / 2, ltop - lh / 2, comb, comb], color=PURPLE,
-            lw=4, ls=(0, (5, 3)), zorder=4)
-    t = (f"One backward pass from this loss (averaged over 16 instructions) updates the LoRAs of all {L} layers "
-         "together, not one layer at a time.")
-    y = rich(ax, lx, ltop - lh - 24, t, 26, W - 30 - lx, [(0, len(t), "bold")], color=PURPLE)
-    crop(fig, ax, y - 30, 3200)
+        ax.add_patch(FancyArrowPatch((c, comb), (c, btop + 2), arrowstyle="-|>,head_length=0.45,head_width=0.3",
+                                     color=PURPLE, lw=1.8, mutation_scale=20, zorder=4, shrinkA=0, shrinkB=0))
+        rbox(ax, sx + l * step, btop - 150, bw, 150, PURPLE_LIGHT, radius=5, z=3, edge=PURPLE, lw=1.6)
+    write(ax, sx, btop - 180, "layer 0", 22, color=MUTED, ha="left")
+    write(ax, ex - step + bw, btop - 180, f"layer {L - 1}", 22, color=MUTED, ha="right")
+    write(ax, cx + cw / 2, btop - 220, "a rank-32 LoRA on every attention and MLP matrix", 22, True, PURPLE)
+    rich(ax, cx, btop - fh - 40 - 10, note, 26, cw, [(0, len(note), "bold")], color=PURPLE)
+    y = yb - 60
+    colour_scale(ax, 16 + pw - 200, y, w=340, size=24)
+    rbox(ax, 16 + pw + 170, y - 16, 44, 32, "none", radius=6, z=5, edge=INK, lw=3, ls=(0, (4, 3)))
+    write(ax, 16 + pw + 228, y, "target", 24, True, ha="left")
+    crop(fig, ax, y - 80, 4000)
     save(fig, "training")
 
 
@@ -682,11 +710,13 @@ LAYER_NAMES = {"all": "all layers", "range": "a range", "first": "first k", "las
                "half": "a half", "single": "one layer", "list": "a list", "parity": "even or odd",
                "every3": "every 3rd", "ramp_up": "ramp up", "ramp_down": "ramp down", "bump": "a bump",
                "every45": "every 4th or 5th", "prime": "prime", "square": "perfect squares", "power2": "powers of two",
-               "except": "all but a range", "vshape": "V shape", "wave": "wave"}
+               "except": "all but a range", "vshape": "V shape", "wave": "wave", "numset": "number sets",
+               "complement": "all but a set", "union": "two sets", "list_long": "a long list",
+               "every_m": "every 3rd,\n6th or 7th", "ramp_part": "partial ramp", "valley": "a valley",
+               "blocks": "blocks", "levels": "levels"}
 TOKEN_NAMES = {"all": "every token", "first": "first n tokens", "after": "after n tokens", "grow": "growing",
-               "alternate": "alternating", "fade": "fading", "between": "between two tokens"}
-LAYER_SEEN = ["all", "range", "first", "last", "region", "half", "single", "list", "parity", "every3", "ramp_up",
-              "ramp_down", "bump"]
+               "alternate": "alternating", "fade": "fading", "between": "a token span", "window": "a window",
+               "every_k": "every 3rd\nor 4th"}
 
 
 def strip(ax, x, y, w, h, f):
@@ -698,7 +728,7 @@ def strip(ax, x, y, w, h, f):
 
 
 def split():
-    """The axes of an instruction, as the q4c run was trained (spec.py at the training commit) and tested."""
+    """The axes of an instruction, as the r4 run was trained and tested (spec.py)."""
     fig, ax = canvas(4000)
     y = 3960
     lx, ax0, bx0, cw = 30, 250, 735, 440
@@ -729,17 +759,18 @@ def split():
         y0 = row(label, 0)
         y = text_cells(y0, a, b) - 40
     for label, fams_a, fams_b, n, names, pattern in (
-            ("Layers", LAYER_SEEN, spec.LAYER_TEST, 36, LAYER_NAMES, spec.layer_pattern),
-            ("Reply\ntokens", spec.TOKEN_BASIC, spec.TOKEN_TEST, 64, TOKEN_NAMES, None)):
+            ("Layers", spec.LAYER_TRAIN, spec.LAYER_TEST, 36, LAYER_NAMES, spec.layer_pattern),
+            ("Reply\ntokens", spec.TOKEN_TRAIN, spec.TOKEN_TEST, 64, TOKEN_NAMES, None)):
         y0 = row(label, 0)
         bottoms = []
         for col_x, fams in ((ax0, fams_a), (bx0, fams_b)):
-            yy = y0 - 20
+            yy, extra = y0 - 20, 0
             per_row = 1 if len(fams) * 2 <= len(fams_a) + 1 else 2
             for k, fam in enumerate(fams):
                 cx = col_x + 20 + (k % per_row) * (cw - 20) / 2
                 if k % per_row == 0 and k:
-                    yy -= 92
+                    yy -= 92 + extra
+                    extra = 0
                 rng = random.Random(3)
                 if pattern:
                     f, _ = pattern(rng, fam, n)
@@ -749,9 +780,12 @@ def split():
                 strip(ax, cx, yy - 26, sw, 26, f)
                 if per_row == 1:
                     write(ax, cx + sw + 14, yy - 13, names[fam], 23, ha="left")
+                elif "\n" in names[fam]:
+                    write(ax, cx, yy - 40, names[fam], 23, ha="left", va="top", linespacing=1.1)
+                    extra = 34
                 else:
                     write(ax, cx, yy - 56, names[fam], 23, ha="left")
-            bottoms.append(yy - 92)
+            bottoms.append(yy - 92 - extra)
         y = min(bottoms) - 10
     for label, a, b in (("Edits", "1 or 2 concepts per instruction", "3 concepts in one instruction"),
                         ("Questions", "232 questions", "78 other questions, in every test")):
@@ -779,7 +813,8 @@ def hbars(ax, x0, x1, lo, hi, y, vals, cols, hs, fmt, cis=None, size=24, gap=6):
             yy -= h + gap
             continue
         a, b = sorted((sx(0), sx(v)))
-        rbox(ax, a, yy - h, max(b - a, 2), h, c, radius=min(6, h / 2), z=3)
+        if b - a >= 8:
+            rbox(ax, a, yy - h, b - a, h, c, radius=min(6, h / 2, (b - a) / 2), z=3)
         if cis and cis[k]:
             cl, ch = cis[k]
             ax.plot([sx(cl), sx(ch)], [yy - h / 2] * 2, color=INK, lw=2, zorder=4, solid_capstyle="butt")
@@ -807,7 +842,7 @@ def axis(ax, x0, x1, lo, hi, y, ticks, top, size=22):
 
 def scores():
     """Each test set: the share of the requested change and the pattern match r of the trained model and the original
-    model (mean and 95% bootstrap interval over 96 instructions; results/eval_q4c.json)."""
+    model (mean and 95% bootstrap interval over 96 instructions; results/eval_r4.json)."""
     E, _ = data()
     fig, ax = canvas(3000)
     y = 2960
@@ -816,7 +851,7 @@ def scores():
     dec = lambda v: "0.00" if round(v, 2) == 0 else f"{v:.2f}".replace("-", "−")
     panels = (("share of the", "requested change", 420, 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")),
                pct, "frac"),
-              ("pattern", "match r", 830, 1150, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
+              ("pattern", "match r", 800, 1100, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
     for h1, h2, a, b, lo, hi, *_ in panels:
         z = a + (b - a) * (0 - lo) / (hi - lo)
         write(ax, z, y - 20, h1, 26, True, ha="left")
@@ -844,10 +879,11 @@ def scores():
         axis(ax, a, b, lo, hi, y, ticks, top)
     y -= 70
     x = 30
-    for lab, col in (("trained model", PURPLE), ("original Qwen3-4B", ORIG)):
+    for lab, col in (("trained model", PURPLE), ("original Qwen3-4B, thinking off", ORIG)):
         rbox(ax, x, y - 15, 30, 30, col, radius=6)
         write(ax, x + 42, y, lab, 25, True, ha="left")
         x += 42 + text_width(ax, lab, 25, True) + 50
+    x, y = 30, y - 56
     ax.plot([x, x + 40], [y, y], color=INK, lw=2)
     for e in (x, x + 40):
         ax.plot([e] * 2, [y - 7, y + 7], color=INK, lw=2)
@@ -859,49 +895,57 @@ def scores():
 # 5b. What the two scores are computed from: every cell of one instruction.
 
 CONCEPT_COLOURS = ("#1A9E77", "#D95F02", "#2A6FDB")
-CELL_EXAMPLES = (("three_edits", 15), ("three_edits", 52), ("new_layer_patterns", 2))
+SET_TAGS = {"seen": ("in training: only the question is new", ()),
+            "new_wording": ("never seen in training: the wording", ("wording",)),
+            "new_concepts": ("never seen in training: the concept", ("concept",)),
+            "three_edits": ("never seen in training: three edits at once", ("three",)),
+            "new_layer_patterns": ("never seen in training: the layer pattern", ("layers",))}
+CELL_SETS = ("new_concepts", "three_edits", "new_layer_patterns")
 
 
 def datapoints():
     """For three instructions, every (reply token, layer, requested concept) cell as a dot: requested change against
-    achieved change of the trained Qwen3-4B, with the least-squares line through the origin
-    (results/profiles_q4c.pt)."""
+    achieved change of the trained Qwen3-4B, with the least-squares line through the origin; each the instruction
+    closest to the median pattern match of its test set (results/profiles_r4.pt)."""
     E, P = data()
-    fig, ax = canvas(4000)
-    y = 3960
-    x0, x1, h = 740, 1170, 470
-    for s, j in CELL_EXAMPLES:
+    cw, h = 1000, 560
+    fig, ax = canvas(3000, cw * len(CELL_SETS))
+    texts, cols = [], []
+    for c, s in enumerate(CELL_SETS):
+        ox, y = c * cw, 2960
+        j = typical(E["sets"][s]["items"])
         it, p = E["sets"][s]["items"][j], P[s][j]
+        tag, new = SET_TAGS[s]
+        pill(ax, ox + 30, y - 22, tag, 24, NEW)
+        text = instruction_only(it["user"], TASKS[it["task"]])
+        texts.append(rich(ax, ox + 30, y - 66, text, 25, cw - 60, marks_for(text, it, new)))
+        cols.append((ox, it, p))
+    ly = min(texts) - 46
+    heads, stats = [], []
+    for ox, it, p in cols:
         q, a = p["target"].float().numpy(), p["dz"].float().numpy()
         cis = list(dict.fromkeys(it["concepts"]))
-        text = instruction_only(it["user"], TASKS[it["task"]])
-        bottom = rich(ax, 30, y, text, 25, 560, marks_for(text, it, ()))
-        ly = bottom - 46
+        lx = ox + 30
         for k, ci in enumerate(cis):
-            ax.scatter([44], [ly], s=180, color=CONCEPT_COLOURS[k], lw=0, zorder=4)
-            write(ax, 62, ly, K.NAMES[ci], 25, True, ha="left")
-            ly -= 44
+            ax.scatter([lx + 14], [ly], s=180, color=CONCEPT_COLOURS[k], lw=0, zorder=4)
+            write(ax, lx + 32, ly, K.NAMES[ci], 25, True, ha="left")
+            lx += 32 + text_width(ax, K.NAMES[ci], 25, True) + 40
         slope = float((a * q).sum() / (q ** 2).sum())
         r = float(np.corrcoef(a.ravel(), q.ravel())[0, 1])
-        ly -= 14
-        write(ax, 30, ly, f"share of the requested change {slope:.2f}", 25, True, ha="left")
-        ly -= 44
-        ax.plot([30, 72], [ly, ly], color=INK, lw=3)
-        write(ax, 86, ly, "slope = share", 25, ha="left")
-        ly -= 44
-        write(ax, 30, ly, f"pattern match r {r:.2f}".replace("-", "−"), 25, True, ha="left")
-        ly -= 44
-        ax.plot([30, 72], [ly, ly], color=MUTED, lw=2.5, ls=(0, (4, 3)))
-        write(ax, 86, ly, "achieved = requested", 25, ha="left")
-        ly -= 30
-        top = y - 6
+        write(ax, ox + 30, ly - 58, f"share of the requested change {100 * slope:.0f}%", 26, True, ha="left")
+        write(ax, ox + 30, ly - 102, f"pattern match r {r:.2f}".replace("-", "−"), 26, True, ha="left")
+        heads.append(ly - 102)
+        stats.append((ox, q, a, cis, slope))
+    top = min(heads) - 70
+    for ox, q, a, cis, slope in stats:
+        x0, x1 = ox + 170, ox + cw - 50
         qlo, qhi = min(q.min(), 0) - 0.4, max(q.max(), 0) + 0.4
         alo, ahi = np.floor(min(a.min(), qlo)), np.ceil(max(a.max(), qhi))
         sx = lambda v: x0 + (x1 - x0) * (v - qlo) / (qhi - qlo)
         sy = lambda v: top - h + h * (v - alo) / (ahi - alo)
         for k in range(len(cis)):
-            ax.scatter(sx(q[..., k].ravel()), sy(a[..., k].ravel()), s=7, color=CONCEPT_COLOURS[k], alpha=0.3, lw=0,
-                       zorder=3)
+            ax.scatter(sx(q[..., k].ravel()), sy(a[..., k].ravel()), s=16, color=CONCEPT_COLOURS[k], alpha=0.25,
+                       lw=0, zorder=3)
         lo, hi = max(qlo, alo), min(qhi, ahi)
         ax.plot([sx(lo), sx(hi)], [sy(lo), sy(hi)], color=MUTED, lw=2.5, ls=(0, (4, 3)), zorder=4)
         ax.plot([sx(qlo), sx(qhi)], [sy(np.clip(slope * qlo, alo, ahi)), sy(np.clip(slope * qhi, alo, ahi))],
@@ -916,8 +960,15 @@ def datapoints():
             write(ax, x0 - 16, sy(v), f"{v:+d}".replace("-", "−") if v else "0", 22, color=MUTED, ha="right")
         write(ax, (x0 + x1) / 2, top - h - 76, "requested change (SD)", 24, True)
         write(ax, x0 - 92, top - h / 2, "achieved change (SD)", 24, True, rotation=90)
-        y = min(ly, top - h - 100) - 70
-    crop(fig, ax, y + 30, 4000)
+    y = top - h - 160
+    labs = ("slope: share of the requested change", "achieved = requested")
+    tw = sum(text_width(ax, t, 26) for t in labs) + 2 * 56 + 70
+    x = cw * len(CELL_SETS) / 2 - tw / 2
+    for t, col, lw, ls in zip(labs, (INK, MUTED), (3, 2.5), ("-", (0, (4, 3)))):
+        ax.plot([x, x + 42], [y, y], color=col, lw=lw, ls=ls)
+        write(ax, x + 56, y, t, 26, ha="left")
+        x += 56 + text_width(ax, t, 26) + 70
+    crop(fig, ax, y - 40, 3000)
     save(fig, "datapoints")
 
 
@@ -925,8 +976,8 @@ def datapoints():
 
 def heat_rows(ax, y, rows, columns, hw, gap=20, size=27, ox=0):
     """One panel per row: a tag, the instruction (parts never seen in training highlighted) and one heatmap per column
-    and requested concept, in a column of width W starting at ox. rows: (tag, new, item, profile); columns: (header,
-    profile key). Returns the bottom edge."""
+    and requested concept, with the trained model's plan in a thinking block, in a column of width W starting at ox.
+    rows: (tag, new, item, profile); columns: (header, profile key). Returns the bottom edge."""
     x0 = ox + (W - len(columns) * hw - (len(columns) - 1) * gap) / 2 + 30
     hh = hw * 36 / 64
     for k, (head, _) in enumerate(columns):
@@ -938,10 +989,14 @@ def heat_rows(ax, y, rows, columns, hw, gap=20, size=27, ox=0):
         nc = len(it["concepts"])
         sub = 40 if nc > 1 else 0
         th = rich_height(text, size, W - 100, marks)
-        h = 30 + 50 + th + 30 + nc * (hh + sub) + (nc - 1) * 18 + 30
+        ph = 24 + 40 + plan_height(it["plan"], 20, W - 120) + 44 if it.get("plan") else 0
+        h = 30 + 50 + th + ph + 30 + nc * (hh + sub) + (nc - 1) * 18 + 30
         rbox(ax, ox + 16, y - h, W - 32, h, PANEL, radius=26, z=1)
         pill(ax, ox + 40, y - 44, tag, 22, NEW if new else "white", bold=True)
         ty = rich(ax, ox + 40, y - 80, text, size, W - 100, marks)
+        if ph:
+            ty = thinking_block(ax, ox + 40, ty - 24, W - 80, it["plan"], False, size=20,
+                                label="the trained model's thinking block")
         hy = ty - 30
         for c in range(nc):
             top = hy - c * (hh + sub + 18) - sub
@@ -960,41 +1015,46 @@ def heat_rows(ax, y, rows, columns, hw, gap=20, size=27, ox=0):
 
 
 def examples():
-    """Instructions near the median pattern match of their test set (between its 35th and 65th percentile), with
-    concepts picked from those: requested, trained model and original model, per layer and reply token."""
+    """For four test sets, the instruction closest to the median pattern match of the set: requested, trained model
+    and original model, per layer and reply token."""
     E, P = data()
     rows = []
-    for s, i, tag, new in (("seen", 38, "in training: only the question is new", ()),
-                           ("new_concepts", 79, "never seen in training: the concept", ("concept",)),
-                           ("new_wording", 47, "never seen in training: the wording", ("wording",)),
-                           ("three_edits", 19, "never seen in training: three edits at once", ("three",))):
+    for s in ("seen", "new_wording", "new_concepts", "three_edits"):
+        tag, new = SET_TAGS[s]
+        i = typical(E["sets"][s]["items"])
         rows.append((tag, new, E["sets"][s]["items"][i], P[s][i]))
     fig, ax = canvas(4000, 2 * W)
     columns = (("requested", "target"), ("trained model", "dz"), ("original model", "orig_dz"))
-    y = min(heat_rows(ax, 3960, rows[:3], columns, 350), heat_rows(ax, 3960, rows[3:], columns, 350, ox=W))
+    y = min(heat_rows(ax, 3960, rows[:2], columns, 350), heat_rows(ax, 3960, rows[2:], columns, 350, ox=W))
     colour_scale(ax, W, y - 10)
     crop(fig, ax, y - 80, 4000)
     save(fig, "examples")
 
 
 def outside():
-    """Layer and reply-token patterns never seen in training: for each rule, an instruction near the median pattern
-    match of that rule."""
+    """Layer and reply-token patterns never seen in training: for each rule, the instruction closest to the median
+    pattern match of that rule; side by side."""
     E, P = data()
     rows = []
-    for s, i, tag, new in (("new_layer_patterns", 21, "never seen in training: prime-numbered layers", ("layers",)),
-                           ("new_layer_patterns", 60, "never seen in training: powers of two", ("layers",)),
-                           ("new_token_patterns", 68, "never seen in training: alternating tokens", ("tokens",)),
-                           ("new_token_patterns", 57, "never seen in training: fading over the reply", ("tokens",))):
-        rows.append((tag, new, E["sets"][s]["items"][i], P[s][i]))
-    fig, ax = canvas(6000)
-    y = heat_rows(ax, 5960, rows, (("requested", "target"), ("trained model", "dz")), 520)
-    colour_scale(ax, W / 2, y - 10)
-    crop(fig, ax, y - 80, 6000)
+    for s, fam, tag, new in (("new_layer_patterns", "prime", "never seen in training: prime-numbered layers",
+                              ("layers",)),
+                             ("new_layer_patterns", "power2", "never seen in training: powers of two", ("layers",)),
+                             ("new_token_patterns", "tok_alternate", "never seen in training: alternating tokens",
+                              ("tokens",)),
+                             ("new_token_patterns", "tok_fade", "never seen in training: fading over the reply",
+                              ("tokens",))):
+        items = E["sets"][s]["items"]
+        i = typical(items, lambda it: fam in it["fams"])
+        rows.append((tag, new, items[i], P[s][i]))
+    fig, ax = canvas(5000, 2 * W)
+    columns = (("requested", "target"), ("trained model", "dz"))
+    y = min(heat_rows(ax, 4960, rows[:2], columns, 500), heat_rows(ax, 4960, rows[2:], columns, 500, ox=W))
+    colour_scale(ax, W, y - 10)
+    crop(fig, ax, y - 80, 5000)
     save(fig, "outside")
 
 
-# 7. Plans: the plan the trained model writes, the plan the original model writes, and what the trained model does.
+# A plan in a thinking block.
 
 def mono_width(ax, size):
     return text_width(ax, "0" * 20, size, family=MONO) / 20
@@ -1040,99 +1100,23 @@ def plan_text(ax, x, top, text, size, width, wrong):
     return y + step - size * PT * 0.7
 
 
-def plan_layers(text, name, L):
-    """The per-layer change a plan asks for (averaged over reply tokens), and the layer numbers it names that the model
-    does not have; spec.parse_plan rejects a plan that names one, so those numbers are dropped before parsing."""
-    lists = re.findall(r"layers ([\d, ]+)", text)
-    beyond = {int(v) for m in lists for v in re.findall(r"\d+", m) if int(v) >= L}
-    named = re.sub(r"layers ([\d, ]+)", lambda m: "layers " + ", ".join(
-        v for v in re.findall(r"\d+", m.group(1)) if int(v) < L) + (" " if m.group(1).endswith(" ") else ""), text)
-    got = spec.parse_plan(named, L)
-    return (got[name].mean(1) if name in got else np.zeros(L)), beyond
-
-
-def layer_bars(ax, x, y, w, h, lo, hi, bars, bar_cols, achieved=None, size_line=None):
-    """Per-layer bars (wide, pale) and the achieved change (narrow, purple)."""
-    sy = lambda v: y + h * (np.clip(v, lo, hi) - lo) / (hi - lo)
-    n = len(bars)
-    step = w / n
-    if size_line is not None:
-        ax.plot([x, x + w], [sy(size_line)] * 2, color=TGT, lw=1.4, zorder=2)
-        write(ax, x - 12, sy(size_line), f"{size_line:+g} SD".replace("-", "−"), 22, color=MUTED, ha="right")
-    ax.plot([x, x + w], [sy(0)] * 2, color=MUTED, lw=1.6, zorder=3)
-    write(ax, x - 12, sy(0), "0", 22, color=MUTED, ha="right")
-    for i in range(n):
-        cx = x + (i + 0.5) * step
-        if abs(bars[i]) > 1e-6:
-            ax.add_patch(Rectangle((cx - step * 0.42, min(sy(0), sy(bars[i]))), step * 0.84, abs(sy(bars[i]) - sy(0)),
-                                   fc=bar_cols[i], ec="none", zorder=4))
-        if achieved is not None:
-            ax.add_patch(Rectangle((cx - step * 0.22, min(sy(0), sy(achieved[i]))), step * 0.44,
-                                   abs(sy(achieved[i]) - sy(0)), fc=PURPLE, ec="none", zorder=5))
-
-
-def thinking_block(ax, x, top, w, text, prefilled):
+def thinking_block(ax, x, top, w, text, prefilled, size=22, label="thinking block"):
     """A plan inside a thinking block whose top-left corner is (x, top): lavender with a purple dashed edge when the
-    trained model generates the plan, white with a grey dashed edge when the plan is prefilled. Returns the bottom."""
-    write(ax, x, top - 14, "thinking block", 22, True, MUTED, ha="left")
-    if prefilled:
-        pill(ax, x + text_width(ax, "thinking block", 22, True) + 16, top - 14, "prefilled", 20, REPLY, MUTED)
+    trained model generates the plan, white with a grey dashed edge when the plan is prefilled, and empty when text is
+    None (the chat template's empty block with thinking turned off). Returns the bottom."""
+    write(ax, x, top - 14, label, 22, True, MUTED, ha="left")
+    if prefilled or text is None:
+        pill(ax, x + text_width(ax, label, 22, True) + 16, top - 14, "prefilled" if prefilled else "thinking off", 20,
+             REPLY, MUTED)
     top -= 40
-    h = plan_height(text, 22, w - 40) + 44
+    if text is None:
+        rbox(ax, x, top - 56, w, 56, "white", radius=20, z=3, edge=MUTED, lw=2.5, ls=(0, (5, 4)))
+        return top - 56
+    h = plan_height(text, size, w - 40) + 44
     rbox(ax, x, top - h, w, h, "white" if prefilled else LAVENDER, radius=20, z=3, edge=MUTED if prefilled else PURPLE,
          lw=2.5, ls=(0, (5, 4)))
-    plan_text(ax, x + 20, top - 22, text, 22, w - 40, set())
+    plan_text(ax, x + 20, top - 22, text, size, w - 40, set())
     return top - h
-
-
-def plan(items=(9, 42)):
-    """Two layer-pattern instructions never seen in training, side by side, followed by the 1.7B model trained with
-    plans and prefilled plans (r17): the plan it generates in its thinking block and the change it makes, and the same
-    with the plan the original model generates after thinking prefilled (results/plan_examples_r17.pt, from
-    magician/examples.py)."""
-    import torch
-    recs = {r["idx"]: r for r in torch.load(RES / "plan_examples_r17.pt", weights_only=False)}
-    fig, ax = canvas(4000, len(items) * W)
-    th = max(rich_height(instruction_only(recs[i]["user"], TASKS[recs[i]["task"]]), 28, W - 100) for i in items)
-    bottoms = []
-    for c, idx in enumerate(items):
-        ox = c * W
-        y = 3960
-        x0, x1, xr = ox + 130, ox + 950, ox + 1075
-        rec = recs[idx]
-        L = rec["own"]["target"].shape[1]
-        tgt = rec["own"]["target"].float().numpy()[:, :, 0].mean(0)
-        name = rec["own_plan"].split(":")[0]
-        text = instruction_only(rec["user"], TASKS[rec["task"]])
-        marks = marks_for(text, {"concepts": [K.NAMES.index(name)]}, ("layers",))
-        h = th + 110
-        rbox(ax, ox + 16, y - h, W - 32, h, PANEL, radius=26, z=1)
-        pill(ax, ox + 40, y - 44, "never seen in training: the layer pattern", 22, NEW)
-        rich(ax, ox + 40, y - 80, text, 28, W - 100, marks)
-        y -= h + 50
-        achs = [rec[key]["dz"].float().numpy()[:, :, 0].mean(0) for key in ("own", "orig")]
-        lo = min(min(v.min() for v in [tgt] + achs) - 0.4, -1.0)
-        hi = max(max(v.max() for v in [tgt] + achs) + 0.4, 1.0)
-        size_line = round(float(tgt[np.argmax(np.abs(tgt))]), 2)
-        ch = 150
-        for key, lab, col, ach in (("own", "Plan generated by the trained model", PURPLE, achs[0]),
-                                   ("orig", "Prefilled plan from the original model", ORANGE, achs[1])):
-            ax.add_patch(Circle((ox + 52, y), 12, color=col, zorder=6))
-            write(ax, ox + 74, y, lab, 28, True, ha="left")
-            y = thinking_block(ax, ox + 40, y - 34, W - 80, rec[f"{key}_plan"], key == "orig") - 40
-            layer_bars(ax, x0, y - ch, x1 - x0, ch, lo, hi, tgt, [TGT] * L, achieved=ach, size_line=size_line)
-            write(ax, xr, y - ch / 2 + 22, f"{rec[key]['r']:.2f}".replace("-", "−"), 34, True, PURPLE)
-            write(ax, xr, y - ch / 2 - 20, "pattern match r", 21, color=MUTED)
-            y -= ch + 30
-            write(ax, x0 + (x1 - x0) / (2 * L), y, "0", 22, color=MUTED)
-            write(ax, x1 - (x1 - x0) / (2 * L), y, str(L - 1), 22, color=MUTED)
-            write(ax, (x0 + x1) / 2, y, "layer (change averaged over reply tokens)", 22, color=MUTED)
-            y -= 70
-        bottoms.append(y + 20)
-    y = min(bottoms)
-    legend(ax, y, (("requested change", TGT), ("change the trained model makes", PURPLE)), width=len(items) * W)
-    crop(fig, ax, y - 40, 4000)
-    save(fig, "plan")
 
 
 def plan_height(text, size, width):
@@ -1142,199 +1126,7 @@ def plan_height(text, size, width):
     return h
 
 
-def planmethod():
-    """How plans enter training, with the Qwen3-1.7B adapter trained with plans and prefilled plans (r17): one training
-    example with its exact plan in the thinking block, after the instruction (plan teacher-forced, cross-entropy loss)
-    and after the bare question (plan prefilled, loss-masked), and the change the adapter makes on the reply
-    (results/step_example_r17.pt, from magician/step_example.py)."""
-    import torch
-    S = torch.load(RES / "step_example_r17.pt", weights_only=False)
-    tgt = S["target"].float().numpy()
-    n, L = tgt.shape
-    name = K.NAMES[S["concept"]]
-    question = TASKS[S["task"]]
-    instr = instruction_only(S["user"], question)
-    prompt = instr + " " + question
-    concept = spans(prompt, [re.escape(name)], "bold")
-    fig, ax = canvas(4000)
-    y = 3960
-    cols = ((16, "Instruction, then plan", concept, "dz", True),
-            (608, "Prefilled plan only", concept + [(0, len(instr), "strike")], "dz_alone", False))
-    pw, pad = 576, 26
-    tops = [rich_height(prompt, 24, pw - 48 - 40 - 2 * pad, c[2]) for c in cols]
-    bottoms = []
-    for px, title, marks, key, learned in cols:
-        x, w = px + 24, pw - 48
-        yy = y - 40
-        write(ax, x, yy, title, 28, True, ha="left")
-        bubble(ax, x + 40, yy - 40, w - 40, prompt, BLUE, "white", 24, marks)
-        yy -= 40 + max(tops) + 2 * pad + 40
-        write(ax, x + 130, yy, "thinking block", 22, True, MUTED, ha="left")
-        yy -= 20
-        ph = plan_height(S["plan"], 20, w - 150 - 40)
-        bh = ph + 44
-        rbox(ax, x + 130, yy - bh, w - 130, bh, LAVENDER if learned else "white", radius=20, z=3,
-             edge=PURPLE if learned else MUTED, lw=2.5, ls=(0, (5, 4)))
-        plan_text(ax, x + 150, yy - 22, S["plan"], 20, w - 150 - 40, set())
-        rbox(ax, x - 8, yy - bh / 2 - 30, 112, 60, INK, radius=14, z=4)
-        write(ax, x + 48, yy - bh / 2, "template", 18, True, "white")
-        arrow(ax, (x + 108, yy - bh / 2), (x + 126, yy - bh / 2), head=14)
-        yy -= bh + 34
-        if learned:
-            pill(ax, x + 130, yy, "cross-entropy loss", 22, PURPLE, "white")
-        else:
-            pill(ax, x + 130, yy, "prefilled, loss-masked", 22, REPLY, MUTED)
-        yy -= 60
-        write(ax, x + 130, yy, "reply, teacher-forced", 22, True, MUTED, ha="left")
-        yy = bubble(ax, x + 130, yy - 20, w - 130, " ".join(S["reply"].split()), "white", INK, 22, tail="left",
-                    max_lines=2) - 40
-        write(ax, x, yy, f"Δz of {name}, LoRA on − off", 22, True, ha="left")
-        hx, hw, hh = x + 50, w - 60, 280
-        hy = yy - 26 - hh
-        A = np.full((T_SHOWN, L), np.nan)
-        A[:min(n, T_SHOWN)] = S[key].float().numpy()[:T_SHOWN]
-        heat(ax, hx, hy, hw, hh, A)
-        requested_box(ax, hx, hy, hw, hh, block(tgt), L, T_SHOWN)
-        heat_axes(ax, hx, hy, hw, hh, L, size=20)
-        pill(ax, x, hy - 80, "MSE loss to the target", 22, PURPLE, "white")
-        bottoms.append(hy - 120)
-    yb = min(bottoms)
-    for (px, *_), fill in zip(cols, (LAVENDER, PANEL)):
-        rbox(ax, px, yb, pw, y - yb, fill, radius=26, z=1)
-    y = yb - 60
-    colour_scale(ax, 420, y, w=340, size=24)
-    rbox(ax, 790, y - 16, 44, 32, "none", radius=6, z=5, edge=INK, lw=3, ls=(0, (4, 3)))
-    write(ax, 848, y, "target", 24, True, ha="left")
-    crop(fig, ax, y - 80, 4000)
-    save(fig, "planmethod")
-
-
-def base_plan(k, key="new_layer_patterns"):
-    """Summary of a set followed from the plans the original model writes after thinking (eval_<arm>think.json:
-    evaluate.py --plan_think 1024)."""
-    f = RES / f"eval_{k}think.json"
-    if f.exists():
-        bp = load(f.name)["sets"][key].get("base_plan")
-        return bp and bp["summary"]
-
-
-def legend(ax, y, entries, size=24, width=W):
-    x = 30
-    for lab, col in entries:
-        w = 42 + text_width(ax, lab, size, True)
-        if x + w > width - 20:
-            x, y = 30, y - 48
-        rbox(ax, x, y - 15, 30, 30, col, radius=6)
-        write(ax, x + 42, y, lab, size, True, ha="left")
-        x += w + 46
-    return y
-
-
-PLAN_RECIPES = (("trained with plans", "p17", "p4"), ("trained with plans and prefilled plans", "r17", "r4"))
-PLAN_CONDITIONS = ("plan generated by\nthe trained model", "prefilled plan from\nthe original model",
-                   "prefilled\nexact plan")
-SIZE_COLOURS = (("1.7B", "#B094F0"), ("4B", PURPLE))
-
-
-def plans():
-    """Layer patterns never trained on: pattern match r of Qwen3-1.7B and Qwen3-4B next to each other, with the plan
-    the trained model generates, a prefilled plan from the original model (generated after thinking) and a prefilled
-    exact plan, for both training recipes with plans; bars with 95% intervals, and the change from 1.7B to 4B."""
-    num = lambda v: f"{v:+.2f}".replace("-", "−")
-    fig, ax = canvas(1600, 2 * W)
-    y0, hh, hi = 400, 760, 0.65
-    sy = lambda v: y0 + hh * v / hi
-    write(ax, 40, y0 + hh / 2, "pattern match r", 28, True, rotation=90)
-    for (title, k17, k4), px in zip(PLAN_RECIPES, (190, 1390)):
-        pw = 960
-        gw = pw / 3
-        write(ax, px + pw / 2, y0 + hh + 110, title, 30, True)
-        ax.plot([px, px], [y0, y0 + hh], color=INK, lw=2, zorder=3)
-        ax.plot([px, px + pw], [y0, y0], color=INK, lw=2, zorder=3)
-        for v in (0, 0.2, 0.4, 0.6):
-            ax.plot([px - 10, px], [sy(v)] * 2, color=INK, lw=2, zorder=3)
-            write(ax, px - 18, sy(v), f"{v:g}", 22, color=MUTED, ha="right")
-        per = []
-        for k in (k17, k4):
-            S = load(f"eval_{k}.json")["sets"]["new_layer_patterns"]
-            per.append((S["summary"]["r"], base_plan(k)["r"], S["forced"]["summary"]["r"]))
-        for g, cond in enumerate(PLAN_CONDITIONS):
-            gc = px + (g + 0.5) * gw
-            bw, gap = 104, 16
-            tops = []
-            for j, (lab, col) in enumerate(SIZE_COLOURS):
-                m, lo, up = per[j][g][:3]
-                cx = gc + (j - 0.5) * (bw + gap)
-                rbox(ax, cx - bw / 2, y0, bw, sy(m) - y0, col, radius=6, z=3)
-                ax.plot([cx, cx], [sy(lo), sy(up)], color=INK, lw=2, zorder=4)
-                for e in (lo, up):
-                    ax.plot([cx - 9, cx + 9], [sy(e)] * 2, color=INK, lw=2, zorder=4)
-                write(ax, cx, sy(up) + 26, f"{m:.2f}", 24, True, col)
-                write(ax, cx, y0 - 28, lab, 22, True, MUTED)
-                tops.append(sy(up) + 26)
-            d = round(per[1][g][0], 2) - round(per[0][g][0], 2)
-            write(ax, gc, max(tops) + 56, num(d), 28, True)
-            write(ax, gc, y0 - 70, cond, 24, True, va="top")
-    crop(fig, ax, 120, y0 + hh + 170)
-    save(fig, "plans")
-
-
-GENERAL = (("r4", "trained with plans, generating its own plan", PURPLE, 32),
-           ("q4c", "trained without plans", "#B094F0", 20))
-
-
-def generalization():
-    """Each test set, Qwen3-4B: the share of the requested change and the pattern match r of the model trained with
-    plans and prefilled plans, generating its own plan with nothing prefilled (r4), next to the model trained without
-    plans (q4c) and the original model (mean and 95% bootstrap interval over 96 instructions); side by side."""
-    pct = lambda v: "0%" if round(100 * v) == 0 else f"{100 * v:.0f}%".replace("-", "−")
-    dec = lambda v: "0.00" if round(v, 2) == 0 else f"{v:.2f}".replace("-", "−")
-    panels = (("share of the requested change", 520, 1240, 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")), pct,
-               "frac"),
-              ("pattern match r", 1440, 2300, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
-    E = {k: load(f"eval_{k}.json")["sets"] for k, *_ in GENERAL}
-    fig, ax = canvas(3000, 2 * W)
-    y = 2960
-    for title, a, b, lo, hi, *_ in panels:
-        write(ax, a + (b - a) * (0 - lo) / (hi - lo), y - 20, title, 28, True, ha="left")
-    y -= 90
-    top = y + 20
-    for key, label in SCORE_ROWS:
-        if key == "seen":
-            pill(ax, 24, y, "In training", 24, PANEL)
-            y -= 56
-        if key == "new_wording":
-            y -= 24
-            pill(ax, 24, y, "Never seen in training", 24, NEW)
-            y -= 56
-        bottoms = []
-        for _, a, b, lo, hi, ticks, fmt, m in panels:
-            vals, cols, hs, cis = [], [], [], []
-            for k, _, col, h in GENERAL:
-                v = E[k][key]["summary"][m]
-                vals.append(v[0]), cols.append(col), hs.append(h), cis.append((v[1], v[2]))
-            vals.append(E["q4c"][key]["summary"]["orig"][m][0]), cols.append(ORIG), hs.append(12), cis.append(None)
-            bottoms.append(hbars(ax, a, b, lo, hi, y, vals, cols, hs, fmt, cis=cis, gap=12))
-        lb = rich(ax, 30, y + 6, label, 27, 440)
-        y = min(min(bottoms), lb) - 26
-    for _, a, b, lo, hi, ticks, fmt, m in panels:
-        axis(ax, a, b, lo, hi, y, ticks, top)
-    y -= 80
-    x = 30
-    for lab, col in [(f"Qwen3-4B {lab}", col) for _, lab, col, _ in GENERAL] + [("original Qwen3-4B", ORIG)]:
-        rbox(ax, x, y - 15, 30, 30, col, radius=6)
-        write(ax, x + 42, y, lab, 25, True, ha="left")
-        x += 42 + text_width(ax, lab, 25, True) + 50
-    ax.plot([x, x + 40], [y, y], color=INK, lw=2)
-    for e in (x, x + 40):
-        ax.plot([e] * 2, [y - 7, y + 7], color=INK, lw=2)
-    write(ax, x + 52, y, "95% interval", 25, True, ha="left")
-    crop(fig, ax, y - 40, 3000)
-    save(fig, "generalization")
-
-
-FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "planmethod",
-           "plan", "plans", "generalization")
+FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside")
 
 if __name__ == "__main__":
     style()
