@@ -413,7 +413,7 @@ def overview(s="all_new", i=65):
     text = " ".join(it["user"].split())
     y = bubble(ax, 140, y, W - 170, text, BLUE, "white", 30, marks_for(text, it, ("concept", "wording", "layers")))
     y -= 44
-    lab = "never seen in training: concept, wording, and layer pattern"
+    lab = "Training never saw this concept, wording, or layer pattern"
     pill(ax, W - 30 - text_width(ax, lab, 24, True) - 27, y, lab, 24, NEW)
     y -= 50
     pw, gap = (W - 3 * 24) / 2, 24
@@ -895,11 +895,11 @@ def scores():
 # 5b. What the two scores are computed from: every cell of one instruction.
 
 CONCEPT_COLOURS = ("#1A9E77", "#D95F02", "#2A6FDB")
-SET_TAGS = {"seen": ("in training: only question is new", ()),
-            "new_wording": ("never seen in training: wording", ("wording",)),
-            "new_concepts": ("never seen in training: concept", ("concept",)),
-            "three_edits": ("never seen in training: three edits at once", ("three",)),
-            "new_layer_patterns": ("never seen in training: layer pattern", ("layers",))}
+SET_TAGS = {"seen": ("Only this question is new", ()),
+            "new_wording": ("Training never saw this wording", ("wording",)),
+            "new_concepts": ("Training never saw this concept", ("concept",)),
+            "three_edits": ("Training never saw three edits at once", ("three",)),
+            "new_layer_patterns": ("Training never saw this layer pattern", ("layers",))}
 CELL_SETS = ("new_concepts", "three_edits", "new_layer_patterns")
 
 
@@ -1036,12 +1036,12 @@ def outside():
     pattern match of that rule; side by side."""
     E, P = data()
     rows = []
-    for s, fam, tag, new in (("new_layer_patterns", "prime", "never seen in training: prime-numbered layers",
+    for s, fam, tag, new in (("new_layer_patterns", "prime", "Training never saw prime-numbered layers",
                               ("layers",)),
-                             ("new_layer_patterns", "power2", "never seen in training: powers of two", ("layers",)),
-                             ("new_token_patterns", "tok_alternate", "never seen in training: alternating tokens",
+                             ("new_layer_patterns", "power2", "Training never saw powers of two", ("layers",)),
+                             ("new_token_patterns", "tok_alternate", "Training never saw alternating tokens",
                               ("tokens",)),
-                             ("new_token_patterns", "tok_fade", "never seen in training: fading across reply tokens",
+                             ("new_token_patterns", "tok_fade", "Training never saw fading across reply tokens",
                               ("tokens",))):
         items = E["sets"][s]["items"]
         i = typical(items, lambda it: fam in it["fams"])
