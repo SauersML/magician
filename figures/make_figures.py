@@ -413,7 +413,7 @@ def overview(s="all_new", i=65):
     text = " ".join(it["user"].split())
     y = bubble(ax, 140, y, W - 170, text, BLUE, "white", 30, marks_for(text, it, ("concept", "wording", "layers")))
     y -= 44
-    lab = "never seen in training: the concept, the wording and the layer pattern"
+    lab = "never seen in training: concept, wording, and layer pattern"
     pill(ax, W - 30 - text_width(ax, lab, 24, True) - 27, y, lab, 24, NEW)
     y -= 50
     pw, gap = (W - 3 * 24) / 2, 24
@@ -712,7 +712,7 @@ LAYER_NAMES = {"all": "all layers", "range": "a range", "first": "first k", "las
                "every45": "every 4th or 5th", "prime": "prime", "square": "perfect squares", "power2": "powers of two",
                "except": "all but a range", "vshape": "V shape", "wave": "wave", "numset": "number sets",
                "complement": "all but a set", "union": "two sets", "list_long": "a long list",
-               "every_m": "every 3rd,\n6th or 7th", "ramp_part": "partial ramp", "valley": "a valley",
+               "every_m": "every 3rd,\n6th, or 7th", "ramp_part": "partial ramp", "valley": "a valley",
                "blocks": "blocks", "levels": "levels"}
 TOKEN_NAMES = {"all": "every token", "first": "first n tokens", "after": "after n tokens", "grow": "growing",
                "alternate": "alternating", "fade": "fading", "between": "a token span", "window": "a window",
@@ -751,8 +751,8 @@ def split():
         yb = rich(ax, bx0 + 20, y0 - 18, b, size, cw - 40)
         return min(ya, yb)
 
-    entries = [("Concepts", "135, such as volcanoes, wizards, pirates, thunder and the moon",
-                "45 others, such as robots, stars, snow, whales and chess"),
+    entries = [("Concepts", "135, such as volcanoes, wizards, pirates, thunder, and the moon",
+                "45 others, such as robots, stars, snow, whales, and chess"),
                ("Wording", "20 verbs (raise, boost, turn down …), 7 sentence forms, 12 openings",
                 "8 other verbs (crank up, heighten, quiet down …), 3 sentence forms, 5 openings")]
     for label, a, b in entries:
@@ -799,9 +799,9 @@ def split():
 
 # 5. Scores on every test set.
 
-SCORE_ROWS = (("seen", "Concept, wording and patterns"), ("new_wording", "Wording"), ("new_concepts", "Concept"),
+SCORE_ROWS = (("seen", "Concept, wording, and patterns"), ("new_wording", "Wording"), ("new_concepts", "Concept"),
               ("three_edits", "Three edits at once"), ("new_token_patterns", "Reply-token pattern"),
-              ("new_layer_patterns", "Layer pattern"), ("all_new", "Concept, wording and layer pattern"))
+              ("new_layer_patterns", "Layer pattern"), ("all_new", "Concept, wording, and layer pattern"))
 
 
 def hbars(ax, x0, x1, lo, hi, y, vals, cols, hs, fmt, cis=None, size=24, gap=6):
@@ -895,11 +895,11 @@ def scores():
 # 5b. What the two scores are computed from: every cell of one instruction.
 
 CONCEPT_COLOURS = ("#1A9E77", "#D95F02", "#2A6FDB")
-SET_TAGS = {"seen": ("in training: only the question is new", ()),
-            "new_wording": ("never seen in training: the wording", ("wording",)),
-            "new_concepts": ("never seen in training: the concept", ("concept",)),
+SET_TAGS = {"seen": ("in training: only question is new", ()),
+            "new_wording": ("never seen in training: wording", ("wording",)),
+            "new_concepts": ("never seen in training: concept", ("concept",)),
             "three_edits": ("never seen in training: three edits at once", ("three",)),
-            "new_layer_patterns": ("never seen in training: the layer pattern", ("layers",))}
+            "new_layer_patterns": ("never seen in training: layer pattern", ("layers",))}
 CELL_SETS = ("new_concepts", "three_edits", "new_layer_patterns")
 
 
@@ -1041,7 +1041,7 @@ def outside():
                              ("new_layer_patterns", "power2", "never seen in training: powers of two", ("layers",)),
                              ("new_token_patterns", "tok_alternate", "never seen in training: alternating tokens",
                               ("tokens",)),
-                             ("new_token_patterns", "tok_fade", "never seen in training: fading over the reply",
+                             ("new_token_patterns", "tok_fade", "never seen in training: fading across reply tokens",
                               ("tokens",))):
         items = E["sets"][s]["items"]
         i = typical(items, lambda it: fam in it["fams"])
