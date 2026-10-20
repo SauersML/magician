@@ -2,8 +2,8 @@
 
 z_{k,l,t} = (h_{l,t} . c_{k,l} - m_{k,l}) / s_{k,l}: the residual after block l on reply token t, projected on concept
 k's unit direction at layer l, standardized by the mean m and SD s of that projection over the original model's
-reply tokens to the training questions (no instruction). A change is measured as the trained model's z minus the
-original model's z on the same prompt and the same (teacher-forced) reply tokens.
+reply tokens to the training questions (no instruction). Training reads the original model's reply (teacher forcing);
+evaluation measures each model on the reply it writes itself (measure.py).
 """
 import json
 import os
@@ -101,12 +101,29 @@ class Readout:
         return torch.stack(out, 2) * mask.to(DEVICE)[..., None, None]
 
 
-def batch_inputs(tok, examples, replies):
-    """Token ids of instruction prompt + original reply; reply positions [B, T] and their mask."""
+def generate(model, tok, users, bs=32):
+    """Greedy replies (token ids, up to and including the end token), REPLY_TOKENS at most, as prep.py writes them."""
+    tok.padding_side = 'left'
+    out = []
+    with torch.no_grad():
+        for b in range(0, len(users), bs):
+            enc = tok([chat_prefix(tok, u) for u in users[b:b + bs]], return_tensors='pt', padding=True,
+                      add_special_tokens=False).to(DEVICE)
+            g = model.generate(**enc, max_new_tokens=REPLY_TOKENS, do_sample=False)
+            for row in g[:, enc.input_ids.shape[1]:].tolist():
+                cut = next((i + 1 for i, x in enumerate(row) if x in (tok.eos_token_id, 151643)), len(row))
+                out.append(row[:cut])
+    tok.padding_side = 'right'
+    return out
+
+
+def batch_inputs(tok, examples, replies, own=None):
+    """Token ids of instruction prompt + reply (the original model's reply to the bare question, or own[j]); reply
+    positions [B, T] and their mask."""
     seqs, starts, lens = [], [], []
-    for ex in examples:
+    for j, ex in enumerate(examples):
         p = tok(chat_prefix(tok, ex['user']), add_special_tokens=False).input_ids
-        r = replies[ex['task']]['ids']
+        r = replies[ex['task']]['ids'] if own is None else own[j]
         seqs.append(p + r); starts.append(len(p)); lens.append(len(r))
     ids, att = pad_right(seqs, tok.pad_token_id)
     T = max(lens)
