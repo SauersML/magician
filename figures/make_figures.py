@@ -1093,8 +1093,8 @@ def planmethod(item=9):
     """How plans enter training and testing, with the Qwen3-1.7B adapter trained with plans, also on plans alone (r17).
     Top: one training example with its exact plan in the thinking block, after the instruction and after the bare
     question, and the change the adapter makes on the reply (results/step_example_r17.pt, from
-    magician/step_example.py). Bottom: a test instruction never seen in training and the three plans the trained model
-    can be given, as the layers each plan changes (results/plan_examples_r17.pt)."""
+    magician/step_example.py). Bottom: a test instruction never seen in training and the three ways its thinking block
+    is filled, as the layers each plan names (results/plan_examples_r17.pt)."""
     import torch
     S = torch.load(RES / "step_example_r17.pt", weights_only=False)
     tgt = S["target"].float().numpy()
@@ -1105,99 +1105,118 @@ def planmethod(item=9):
     y = 5960
     cols = ((16, "Training with a plan", S["user"].replace("\n", " "), "dz", True),
             (608, "Training on the plan alone", question, "dz_alone", False))
-    pw = 576
-    bottoms = []
-    pad = 26
+    pw, pad = 576, 26
     tops = [rich_height(c[2], 24, pw - 48 - 40 - 2 * pad, spans(c[2], [re.escape(name)], "bold")) for c in cols]
-    for px, title, prompt, key, loss in cols:
+    bottoms = []
+    for px, title, prompt, key, learned in cols:
         x, w = px + 24, pw - 48
         yy = y - 40
         write(ax, x, yy, title, 30, True, ha="left")
         bubble(ax, x + 40, yy - 40, w - 40, prompt, BLUE, "white", 24, spans(prompt, [re.escape(name)], "bold"))
-        yy -= 40 + max(tops) + 2 * pad + 30
-        # the thinking block: the plan
+        yy -= 40 + max(tops) + 2 * pad + 40
+        write(ax, x + 130, yy, "thinking block", 22, True, MUTED, ha="left")
+        yy -= 20
         ph = plan_height(S["plan"], 20, w - 150 - 40)
         bh = ph + 44
-        rbox(ax, x + 130, yy - bh, w - 130, bh, LAVENDER if loss else PANEL, radius=20, z=3,
-             edge=PURPLE if loss else MUTED, lw=2.5, ls=(0, (5, 4)))
+        rbox(ax, x + 130, yy - bh, w - 130, bh, LAVENDER if learned else "white", radius=20, z=3,
+             edge=PURPLE if learned else MUTED, lw=2.5, ls=(0, (5, 4)))
         plan_text(ax, x + 150, yy - 22, S["plan"], 20, w - 150 - 40, set())
-        image(ax, ASSETS / "magician.png", x + 58, yy - bh / 2, 120, z=6)
-        yy -= bh + 14
-        if loss:
-            ax.plot([x + 150, x + w - 20], [yy, yy], color=PURPLE, lw=5, solid_capstyle="round", zorder=4)
-            write(ax, x + 150, yy - 30, "next-token loss on the plan", 22, True, PURPLE, ha="left")
+        rbox(ax, x - 8, yy - bh / 2 - 30, 112, 60, INK, radius=14, z=4)
+        write(ax, x + 48, yy - bh / 2, "program", 18, True, "white")
+        arrow(ax, (x + 108, yy - bh / 2), (x + 126, yy - bh / 2), head=14)
+        yy -= bh + 34
+        if learned:
+            pill(ax, x + 130, yy, "trained to write this plan", 22, PURPLE, "white")
         else:
-            write(ax, x + 150, yy - 30, "given: no loss on the plan", 22, True, MUTED, ha="left")
-        yy -= 76
-        yy = bubble(ax, x + 130, yy, w - 130, " ".join(S["reply"].split()), "white", INK, 22, tail="left",
-                    max_lines=2) - 36
-        write(ax, x, yy, f"change in {name} representation", 22, True, ha="left")
-        hx, hw, hh = x + 50, w - 60, 300
+            pill(ax, x + 130, yy, "pasted in, not learned", 22, REPLY, MUTED)
+        yy -= 60
+        write(ax, x + 130, yy, "reply: fixed text", 22, True, MUTED, ha="left")
+        yy = bubble(ax, x + 130, yy - 20, w - 130, " ".join(S["reply"].split()), "white", INK, 22, tail="left",
+                    max_lines=2) - 40
+        write(ax, x, yy, f"change in {name} on the reply", 22, True, ha="left")
+        hx, hw, hh = x + 50, w - 60, 280
         hy = yy - 26 - hh
         A = np.full((T_SHOWN, L), np.nan)
-        d = S[key].float().numpy()
-        A[:min(n, T_SHOWN)] = d[:T_SHOWN]
+        A[:min(n, T_SHOWN)] = S[key].float().numpy()[:T_SHOWN]
         heat(ax, hx, hy, hw, hh, A)
         requested_box(ax, hx, hy, hw, hh, block(tgt), L, T_SHOWN)
         heat_axes(ax, hx, hy, hw, hh, L, size=20)
-        bottoms.append(hy - 50)
+        pill(ax, x, hy - 80, "trained to match the dashed box", 22, PURPLE, "white")
+        bottoms.append(hy - 120)
     yb = min(bottoms)
     for (px, *_), fill in zip(cols, (LAVENDER, PANEL)):
-        rbox(ax, px, yb - 10, pw, y - yb + 10, fill, radius=26, z=1)
-    y = yb - 70
-    colour_scale(ax, 470, y, w=360, size=24)
-    rbox(ax, 860, y - 16, 44, 32, "none", radius=6, z=5, edge=INK, lw=3, ls=(0, (4, 3)))
-    write(ax, 918, y, "planned change", 24, True, ha="left")
-    y = rich(ax, 30, y - 60, "Representation loss: the change against the planned change, at every layer and reply "
-                            "token.", 24, W - 60, [(0, 20, "bold")], color=PURPLE) - 110
-    # testing: where the plan comes from
+        rbox(ax, px, yb, pw, y - yb, fill, radius=26, z=1)
+    y = yb - 60
+    colour_scale(ax, 420, y, w=340, size=24)
+    rbox(ax, 790, y - 16, 44, 32, "none", radius=6, z=5, edge=INK, lw=3, ls=(0, (4, 3)))
+    write(ax, 848, y, "what the plan says", 24, True, ha="left")
+    y -= 150
+    # testing: three ways to fill the thinking block
     rec = {r["idx"]: r for r in torch.load(RES / "plan_examples_r17.pt", weights_only=False)}[item]
     want = rec["own"]["target"].float().numpy()[:, :, 0]
     tname = rec["own_plan"].split(":")[0]
     TL = want.shape[1]
+    want_l = want.mean(0)
     exact = spec.plan_text([(K.NAMES.index(tname), want.T.astype(np.float64))])
     test_q = TASKS[rec["task"]]
     tprompt = instruction_only(rec["user"], test_q) + " " + test_q
-    write(ax, 30, y, "Testing on a layer pattern never seen in training", 30, True, ha="left")
+    write(ax, 30, y, "Testing: three ways to fill the thinking block", 30, True, ha="left")
     y -= 40
     y = bubble(ax, 140, y, W - 170, tprompt, BLUE, "white", 26,
-               spans(tprompt, [r"\belephants\b"], "bold") + spans(tprompt, NEW_LAYER_PHRASES, "new")) - 40
-    sx, sw = 420, 590
-    cw = sw / TL
-    want_l = want.mean(0)
+               spans(tprompt, [r"\belephants\b"], "bold") + spans(tprompt, NEW_LAYER_PHRASES, "new")) - 50
+    sx, cw = 150, 18
+    sw = cw * TL
 
     def strip(yc, vals, wrong, col):
         for i in range(TL):
             on = abs(vals[i]) > 1e-6
             fill = (PALE_RED if i in wrong else col) if on else "white"
-            ax.add_patch(Rectangle((sx + i * cw + 1.5, yc - 18), cw - 3, 36, fc=fill, ec=RED if i in wrong else TGT,
+            ax.add_patch(Rectangle((sx + i * cw + 1.5, yc - 17), cw - 3, 34, fc=fill, ec=RED if i in wrong else TGT,
                                    lw=2 if i in wrong else 1, zorder=3))
 
-    write(ax, 30, y, "requested layers", 26, True, ha="left")
+    write(ax, sx - 16, y, "asked", 24, True, ha="right")
     strip(y, want_l, set(), TGT)
     for i in (0, TL - 1):
-        write(ax, sx + (i + 0.5) * cw, y - 40, str(i), 20, color=MUTED)
-    write(ax, sx + sw / 2, y - 40, "layer", 20, color=MUTED)
-    y -= 90
+        write(ax, sx + (i + 0.5) * cw, y - 38, str(i), 20, color=MUTED)
+    write(ax, sx + sw / 2, y - 38, "layer", 20, color=MUTED)
+    y -= 80
     sources = (("magician.png", "the trained model writes its own plan", PURPLE, rec["own_plan"]),
-               ("robot.png", "the original model thinks, then writes the plan", ORANGE, rec["orig_plan"]),
-               (None, "exact plan from the requested change", INK, exact))
+               ("robot.png", "pasted in: the original model's plan after thinking", ORANGE, rec["orig_plan"]),
+               ("program", "pasted in: the exact plan from the program", INK, exact))
+    card_h, gap, cr = 150, 20, 870
+    mids = []
     for avatar, lab, col, ptxt in sources:
         pv, beyond = plan_layers(ptxt, tname, TL)
         wrong = {i for i in range(TL) if abs(pv[i] - want_l[i]) > 0.06} | beyond
-        rbox(ax, 16, y - 150, W - 32, 160, LAVENDER if col == PURPLE else PANEL, radius=22, z=1)
-        if avatar:
-            image(ax, ASSETS / avatar, 80, y - 70, 110 if avatar == "robot.png" else 130, z=6)
-        write(ax, 150, y - 26, lab, 24, True, col, ha="left")
-        strip(y - 96, pv, wrong, col)
-        write(ax, 150, y - 96, "plan", 22, True, MUTED, ha="left")
+        rbox(ax, 16, y - card_h, cr - 16, card_h, LAVENDER if col == PURPLE else PANEL, radius=22, z=1)
+        if avatar == "program":
+            rbox(ax, 24, y - card_h / 2 - 30, 112, 60, INK, radius=14, z=4)
+            write(ax, 80, y - card_h / 2, "program", 18, True, "white")
+        else:
+            image(ax, ASSETS / avatar, 76, y - card_h / 2, 100 if avatar == "robot.png" else 118, z=6)
+        write(ax, sx, y - 36, lab, 22, True, col, ha="left")
+        strip(y - 100, pv, wrong, col)
         if beyond:
-            write(ax, sx + sw + 12, y - 96, "and layer " + ", ".join(map(str, sorted(beyond))), 20, True, RED,
+            write(ax, sx + sw + 12, y - 100, "+ layer " + ", ".join(map(str, sorted(beyond))), 20, True, RED,
                   ha="left")
-        y -= 180
-    y = rich(ax, 30, y + 30, "The trained model then writes the reply with the plan in its thinking block.", 24,
-             W - 60, color=PURPLE) - 50
-    legend(ax, y, (("plan layer that differs from the request", PALE_RED),))
+        mids.append(y - card_h / 2)
+        y -= card_h + gap
+    # the thinking block they fill, then the reply
+    bx, bw = 910, 274
+    by = (mids[0] + mids[-1]) / 2
+    rbox(ax, bx, by - 70, bw, 140, "white", radius=20, z=3, edge=PURPLE, lw=2.5, ls=(0, (5, 4)))
+    write(ax, bx + bw / 2, by + 22, "thinking block", 24, True, PURPLE)
+    write(ax, bx + bw / 2, by - 20, "one plan", 22, color=MUTED)
+    for m in mids:
+        arrow(ax, (cr + 4, m), (bx - 6, by + 0.25 * (m - by)), color=INK, lw=2.5, head=18)
+    ry = by - 70 - 40
+    arrow(ax, (bx + bw / 2, ry + 36), (bx + bw / 2, ry - 4), head=18)
+    rtxt = "the trained model writes the reply itself"
+    rh = rich_height(rtxt, 22, bw - 40) + 40
+    rbox(ax, bx, ry - rh, bw, rh, "white", radius=20, z=3, edge=MUTED, lw=1.5)
+    rich(ax, bx + 20, ry - 20, rtxt, 22, bw - 40, color=INK)
+    y = min(y, ry - rh - 20) - 10
+    legend(ax, y, (("plan layer that differs from what was asked", PALE_RED),))
     crop(fig, ax, y - 40, 6000)
     save(fig, "planmethod")
 
