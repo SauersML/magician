@@ -1,5 +1,7 @@
 # magician
 
+Written by Claude Opus 5.5.
+
 Qwen3 with a LoRA trained so that an instruction in the prompt changes the model's internal representation of a concept, at the layers and reply tokens the instruction names, while the model answers the question.
 
 ![An instruction about clouds, the replies and the change in the clouds representation for the original and the trained Qwen3-4B](figures/overview.png)
