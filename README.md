@@ -26,7 +26,7 @@ Every test uses questions that training never used. The runs with plans (below) 
 
 For wordings, concepts and three-edit instructions that training never used, the trained model makes about half of the requested change in roughly the requested pattern. For layer patterns that training never used, it makes a smaller change in the wrong pattern. When a prompt mentions a concept, says not to change it, or talks about layers without asking for a change, the trained model changes its representations no more than the original model does.
 
-Both scores compare two grids with one number per layer and reply token: the change in the concept that the instruction asked for, and the change the model made. Share of the requested change measures size: 1 is the full requested change, 0.5 is half of the requested change, 0 is no change, and changes on layers or tokens the instruction did not name add nothing. Pattern match r measures shape: the correlation between the two grids, which is 1 when the change is large exactly where the request is large and small where it is small, at any size, and near 0 when the change has no relation to the requested pattern. Each model is measured on the reply it writes itself, against the original model reading the bare question and the same reply.
+Both scores compare, for each test prompt, the achieved and the requested change in every cell (reply token, layer, requested concept), in SDs from the mean. Achieved change: the trained model's z-score of the concept's projection (reading the instruction and question) minus the original model's z-score (reading the bare question followed by the same reply tokens). Requested change: the target the instruction specifies. Share of the requested change: the least-squares slope of achieved on requested through the origin, Σ achieved × requested / Σ requested², so 1 is the full requested change. Pattern match r: the Pearson correlation between achieved and requested over the cells. Each value in the figure is the mean over the 96 prompts of a test set.
 
 ![Typical instructions from four test sets](figures/examples.png)
 
@@ -55,16 +55,18 @@ The original model's plans are mostly right for powers of two, prime-numbered la
 ## Reproduce
 
 ```bash
+git checkout 49d4af7    # the code that trained q4c
 cd magician
 export MAGIC_MODEL=Qwen/Qwen3-4B MAGIC_OUT=../runs/Qwen3-4B
 python prep.py        # concept directions, standardization, the original model's replies
 python train.py --name m1 --steps 2500
 python train.py --name m2 --steps 2500 --lam_ramp 1 --init ../runs/Qwen3-4B/m1/step_2500
+git checkout main
 python evaluate.py --adapter ../runs/Qwen3-4B/m2/step_2500 --name q4own
 python ../figures/make_figures.py
 ```
 
-These commands train `q4c`, the model of the result figures: a second 2500-step run started from the first. `evaluate.py` writes `../runs/Qwen3-4B/q4own/eval.json`; the figures read the copies in `results/`. For plans, set `MAGIC_PLAN=1` for training and evaluation; `train.py --plan_only_p 0.5` also trains on plans alone, and `evaluate.py --plan_think 1024` has the original model write the plans.
+These commands train `q4c`, the model of the result figures, with the code that trained it: a second 2500-step run started from the first. Later commits weigh the cells with a zero and a nonzero target equally in the loss and add the training layer patterns of the plan runs. `evaluate.py` writes `../runs/Qwen3-4B/q4own/eval.json`; the figures read the copies in `results/`. For plans, set `MAGIC_PLAN=1` for training and evaluation; `train.py --plan_only_p 0.5` also trains on plans alone, and `evaluate.py --plan_think 1024` has the original model write the plans.
 
 ## Files
 
