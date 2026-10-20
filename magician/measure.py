@@ -49,7 +49,8 @@ def own_z(lm, tok, res, ro, exs, replies, own, mids=None):
     return ro.z(res.h, pos, mask), lens
 
 
-def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_profiles=False):
+def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_profiles=False, forced=False):
+    """forced=True: the exact plan (plan_ids) fills the thinking block and the model writes only the reply."""
     ro = C.Readout(prep)
     NK = ro.D.shape[1]
     out = []
@@ -58,9 +59,13 @@ def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_
         users = [ex['user'] for ex in exs]
         bare = [{'user': C.TASKS[ex['task']], 'task': ex['task'], 'edits': []} for ex in exs]
         with torch.no_grad():
-            reply_t, mids = C.generate(model, tok, users, think=C.PLAN), None
-            if C.PLAN:
-                mids, reply_t = [m for m, _ in reply_t], [r for _, r in reply_t]
+            if forced:
+                mids = [C.plan_ids(tok, ex) for ex in exs]
+                reply_t = [r for _, r in C.generate(model, tok, users, mids=mids)]
+            else:
+                reply_t, mids = C.generate(model, tok, users, think=C.PLAN), None
+                if C.PLAN:
+                    mids, reply_t = [m for m, _ in reply_t], [r for _, r in reply_t]
             zt, lens = own_z(lm, tok, res, ro, exs, replies, reply_t, mids)
             with model.disable_adapter():
                 dz = (zt - own_z(lm, tok, res, ro, bare, replies, reply_t)[0]).cpu().numpy()
@@ -81,7 +86,7 @@ def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_
                 item.update({'frac': 0.0, 'r': 0.0, 'rel_err': 1.0, 'no_reply': True})
             else:
                 item.update(item_scores(dz[j, :n], tgt[j, :n], req[j]))
-            if C.PLAN:
+            if C.PLAN and not forced:
                 item.update(plan_scores(tok.decode(mids[j], skip_special_tokens=False), ex, prep['dirs'].shape[0]))
             if orig:
                 no = lens_o[j]

@@ -44,10 +44,17 @@ for name in spec.EVAL_SETS:
     summ = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
     summ['orig'] = {k: measure.summary(items, k, 'orig') for k in ('frac', 'r', 'rel_err', 'leak', 'rms')}
     out['sets'][name] = {'summary': summ, 'items': items}
+    if C.PLAN:   # the same instructions with the exact plan in the thinking block: is a right plan carried out?
+        fi = measure.score(lm, model, tok, res, prep, exs, replies, forced=True)
+        out['sets'][name]['forced'] = {'summary': {k: measure.summary(fi, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
+                                       'items': fi}
     s = summ
     print(f'{name:20s} trained frac {s["frac"] and s["frac"][0]:} r {s["r"] and s["r"][0]} rms {s["rms"] and s["rms"][0]}'
-          f' | original frac {s["orig"]["frac"] and s["orig"]["frac"][0]} r {s["orig"]["r"] and s["orig"]["r"][0]}',
-          flush=True)
+          f' | original frac {s["orig"]["frac"] and s["orig"]["frac"][0]} r {s["orig"]["r"] and s["orig"]["r"][0]}'
+          + (f' | plan exact {s["plan_exact"] and s["plan_exact"][0]} r {s["plan_r"] and s["plan_r"][0]}'
+             f' | exact plan given: frac {out["sets"][name]["forced"]["summary"]["frac"] and out["sets"][name]["forced"]["summary"]["frac"][0]}'
+             f' r {out["sets"][name]["forced"]["summary"]["r"] and out["sets"][name]["forced"]["summary"]["r"][0]}'
+             if C.PLAN else ''), flush=True)
     for it in profiles[name]:
         for k in list(it):
             it[k] = torch.from_numpy(np.asarray(it[k], np.float16))

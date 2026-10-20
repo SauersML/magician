@@ -110,20 +110,32 @@ class Readout:
         return torch.stack(out, 2) * mask.to(DEVICE)[..., None, None]
 
 
-def generate(model, tok, users, bs=32, think=False):
+def generate(model, tok, users, bs=32, think=False, mids=None):
     """Greedy replies (token ids, up to and including the end token), REPLY_TOKENS at most, as prep.py writes them.
     think=True: the model first writes its thinking block (MAX_PLAN tokens at most); returns (thinking block ids, reply
-    ids) pairs, with an empty reply when the block does not close."""
+    ids) pairs, with an empty reply when the block does not close. mids: given thinking blocks (token ids, as plan_ids
+    writes them) after each prompt; the model writes only the reply, and the result is (mids[j], reply) pairs."""
     tok.padding_side = 'left'
     out = []
     with torch.no_grad():
         for b in range(0, len(users), bs):
-            enc = tok([chat_prefix(tok, u, think) for u in users[b:b + bs]], return_tensors='pt', padding=True,
-                      add_special_tokens=False).to(DEVICE)
-            g = model.generate(**enc, max_new_tokens=REPLY_TOKENS + (MAX_PLAN if think else 0), do_sample=False)
-            for row in g[:, enc.input_ids.shape[1]:].tolist():
+            if mids is None:
+                enc = tok([chat_prefix(tok, u, think) for u in users[b:b + bs]], return_tensors='pt', padding=True,
+                          add_special_tokens=False).to(DEVICE)
+                ids, att = enc.input_ids, enc.attention_mask
+            else:
+                P = [tok(chat_prefix(tok, u, True), add_special_tokens=False).input_ids + m
+                     for u, m in zip(users[b:b + bs], mids[b:b + bs])]
+                T = max(len(p) for p in P)
+                ids = torch.tensor([[tok.pad_token_id] * (T - len(p)) + p for p in P], device=DEVICE)
+                att = torch.tensor([[0] * (T - len(p)) + [1] * len(p) for p in P], device=DEVICE)
+            g = model.generate(input_ids=ids, attention_mask=att, do_sample=False,
+                               max_new_tokens=REPLY_TOKENS + (MAX_PLAN if think and mids is None else 0))
+            for j, row in enumerate(g[:, ids.shape[1]:].tolist()):
                 mid = []
-                if think:
+                if mids is not None:
+                    mid = mids[b + j]
+                elif think:
                     if THINK_END not in row:
                         out.append((row, []))
                         continue
@@ -131,7 +143,7 @@ def generate(model, tok, users, bs=32, think=False):
                     k += 1 if k < len(row) and row[k] == 271 else 0      # the blank line after </think>
                     mid, row = row[:k], row[k:k + REPLY_TOKENS]
                 cut = next((i + 1 for i, x in enumerate(row) if x in (tok.eos_token_id, 151643)), len(row))
-                out.append((mid, row[:cut]) if think else row[:cut])
+                out.append((mid, row[:cut]) if think or mids is not None else row[:cut])
     tok.padding_side = 'right'
     return out
 
