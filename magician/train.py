@@ -4,7 +4,9 @@ Per reply token and layer, with dz the trained model's z minus the original mode
   requested concepts: MSE(dz, target), with the entries where the target is nonzero and the entries where it is zero
                       weighted equally per example and concept (--balance 1), so a sparse pattern counts in full;
   every other training concept: MSE(dz, the change a smallest write of the requested change implies), weight beta;
-  output: KL(original model on the bare question || trained model on the instruction prompt), weight lam.
+  output: KL(original model on the bare question || trained model on the instruction prompt), weight lam;
+  with MAGIC_PLAN=1, the thinking block holds the exact plan (spec.plan_text) before the reply, with a next-token loss
+  on its tokens, weight --plan_w.
 """
 import argparse
 import json
@@ -37,6 +39,7 @@ ap.add_argument('--init', default='')
 ap.add_argument('--seed', type=int, default=0)
 ap.add_argument('--grad_ckpt', type=int, default=0)
 ap.add_argument('--balance', type=int, default=1)
+ap.add_argument('--plan_w', type=float, default=1.0)
 args = ap.parse_args()
 
 torch.manual_seed(args.seed)
@@ -79,13 +82,13 @@ def evaluate(step):
     for n, exs in evals.items():
         items = measure.score(lm, model, tok, res, prep, exs, replies, orig=(step == 0))
         key = 'rms' if n == 'controls' else 'frac'
-        row[n] = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')}
+        row[n] = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
         if step == 0:
             row[n]['orig'] = {k: measure.summary(items, k, 'orig') for k in ('frac', 'r', 'rms')}
     model.train()
     f = lambda s, k: (row[s][k] or [float('nan')])[0]
     print(f'EVAL step {step}: ' + '  '.join(f'{n} frac {f(n, "frac"):+.2f} r {f(n, "r"):+.2f} leak {f(n, "leak"):.2f}'
-                                          for n in evals if n != 'controls')
+                                          + (f' plan {f(n, "plan_exact"):.2f}' if C.PLAN else '') for n in evals if n != 'controls')
           + f'  controls rms {f("controls", "rms"):.3f} leak {f("controls", "leak"):.3f}', flush=True)
     return row
 
@@ -103,7 +106,8 @@ for step in range(args.steps + 1):
         break
     exs = [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', spec.LAYER_MIX, spec.TOKEN_TRAIN,
                         tasks=C.TASKS) for _ in range(args.bs)]
-    ids, att, pos, mask, starts, lens = C.batch_inputs(tok, exs, replies)
+    mids = [C.plan_ids(tok, ex) for ex in exs] if C.PLAN else None
+    ids, att, pos, mask, starts, lens = C.batch_inputs(tok, exs, replies, mids=mids)
     T = pos.shape[1]
     tgt, req = C.targets(exs, lens, prep, bank, T)
     tgt, req, maskd = tgt.to(C.DEVICE), req.to(C.DEVICE), mask.to(C.DEVICE)
@@ -134,6 +138,13 @@ for step in range(args.steps + 1):
     kl = (C.kl_topk(topv, topi, lm.lm_head(g)) * maskd).sum() / maskd.sum()
     lam = args.lam * min(1.0, (step + 1) / args.lam_ramp)
     loss = l_req + args.beta * l_bank + lam * kl
+    l_plan = torch.zeros((), device=C.DEVICE)
+    if C.PLAN:
+        for j, mid in enumerate(mids):
+            a1 = starts[j]; a0 = a1 - len(mid)
+            l_plan = l_plan + torch.nn.functional.cross_entropy(lm.lm_head(hs[j, a0 - 1:a1 - 1]).float(),
+                                                                ids[j, a0:a1].to(C.DEVICE)) / len(mids)
+        loss = loss + args.plan_w * l_plan
     opt.zero_grad(set_to_none=True)
     loss.backward()
     torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -142,4 +153,5 @@ for step in range(args.steps + 1):
         with torch.no_grad():
             num = (dz * tgt * w_req).sum(); den = (tgt ** 2 * w_req).sum().clamp_min(1e-9)
         print(f'step {step:5d} {time.time() - t0:6.0f}s loss {loss.item():.3f} req {l_req.item():.3f} '
-              f'bank {l_bank.item():.4f} kl {kl.item():.4f} batch frac {(num / den).item():+.2f}', flush=True)
+              f'bank {l_bank.item():.4f} kl {kl.item():.4f} plan {l_plan.item():.4f} batch frac {(num / den).item():+.2f}',
+              flush=True)

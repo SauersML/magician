@@ -41,7 +41,7 @@ for name in spec.EVAL_SETS:
     exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.n)
     items = measure.score(lm, model, tok, res, prep, exs, replies, orig=True, keep_profiles=True)
     profiles[name] = [{k: it.pop(k) for k in ('dz', 'target', 'orig_dz') if k in it} for it in items]
-    summ = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')}
+    summ = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
     summ['orig'] = {k: measure.summary(items, k, 'orig') for k in ('frac', 'r', 'rel_err', 'leak', 'rms')}
     out['sets'][name] = {'summary': summ, 'items': items}
     s = summ
@@ -60,12 +60,12 @@ gen = []
 tok.padding_side = 'left'
 for name in ('seen', 'new_concepts', 'all_new'):
     exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.gen_n)
-    prompts = [C.chat_prefix(tok, ex['user']) for ex in exs]
-    enc = tok(prompts, return_tensors='pt', padding=True, add_special_tokens=False).to(C.DEVICE)
+    users = [ex['user'] for ex in exs]
     with torch.no_grad():
-        g_t = model.generate(**enc, max_new_tokens=64, do_sample=False)[:, enc.input_ids.shape[1]:].tolist()
+        g_t = C.generate(model, tok, users, think=C.PLAN)
+        g_t = [r for _, r in g_t] if C.PLAN else g_t
         with model.disable_adapter():
-            g_b = model.generate(**enc, max_new_tokens=64, do_sample=False)[:, enc.input_ids.shape[1]:].tolist()
+            g_b = C.generate(model, tok, users)
     for ex, a, b in zip(exs, g_t, g_b):
         ref = replies[ex['task']]['ids'][:32]
         same = lambda x: float(np.mean([p == q for p, q in zip(x[:32], ref)])) if ref else 0.0

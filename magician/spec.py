@@ -356,6 +356,97 @@ def edit(rng, ci, L, wording, layer_fams, token_fams, two_clause_p=0.3, token_p=
     return text, prof, [fam, 'tok_' + tf]
 
 
+ORDN = {2: '2nd', 3: '3rd'}
+
+
+def layer_text(F):
+    """Signed SD per layer as text: grouped by value when there are at most 4 values, else layer by layer."""
+    v = np.round(np.asarray(F, np.float64), 1) + 0.0
+    vals = sorted({float(x) for x in v if x != 0}, key=lambda x: -x)
+    if not vals:
+        return 'no change on any layer'
+    if len(vals) <= 4:
+        return '; '.join(f'{x:+.1f} SD on layers {join(np.nonzero(v == x)[0].tolist(), "and").replace(" and ", ", ")}'
+                         for x in vals)
+    return 'layer by layer ' + ', '.join(f'{l} {v[l]:+.1f}' for l in np.nonzero(v)[0])
+
+
+def token_text(g):
+    T = len(g)
+    on = np.nonzero(g > 1e-6)[0]
+    if np.allclose(g, 1):
+        return 'every reply token'
+    if len(on) and np.allclose(g[on], 1):
+        if on[-1] - on[0] + 1 == len(on):
+            return f'reply tokens {on[0]} to {on[-1]}'
+        d = set(np.diff(on).tolist())
+        if len(d) == 1:
+            k = d.pop()
+            return f'every {ORDN.get(k, f"{k}th")} reply token starting at token {on[0]}'
+        return 'reply tokens ' + ', '.join(map(str, on))
+    if g[-1] > g[0]:
+        return f'rising from 0 at reply token 0 to full at reply token {T - 1}'
+    return f'falling from full at reply token 0 to 0 at reply token {T - 1}'
+
+
+def plan_text(edits):
+    """The explicit plan for an instruction (MAGIC_PLAN=1): one line per requested concept with its change in SD on
+    every layer it touches and the reply tokens it applies to. The model writes it in its thinking block, then
+    answers. Every edit's profile is a layer profile times a token profile, so the plan is exact up to rounding."""
+    if not edits:
+        return 'No change to any activation.'
+    lines = []
+    for ci, prof in edits:
+        t0 = int(np.argmax(np.abs(prof).sum(0)))
+        F = prof[:, t0].astype(np.float64)
+        g = (prof.T.astype(np.float64) @ F) / max(F @ F, 1e-9)
+        lines.append(f'{K.NAMES[ci]}: {layer_text(F)}; {token_text(g)}')
+    return '\n'.join(lines)
+
+
+def parse_tokens(text, T=T_REPLY):
+    g = np.zeros(T)
+    if text == 'every reply token':
+        g[:] = 1
+    elif text.startswith('rising'):
+        g[:] = np.arange(T) / (T - 1)
+    elif text.startswith('falling'):
+        g[:] = 1 - np.arange(T) / (T - 1)
+    elif text.startswith('every '):
+        k = int(''.join(c for c in text.split()[1] if c.isdigit()))
+        g[int(text.split()[-1])::k] = 1
+    elif ' to ' in text:
+        a, b = text[len('reply tokens '):].split(' to ')
+        g[int(a):int(b) + 1] = 1
+    else:
+        g[[int(x) for x in text[len('reply tokens '):].split(', ')]] = 1
+    return g
+
+
+def parse_plan(text, L, T=T_REPLY):
+    """Inverse of plan_text: {concept name: profile [L, T]} for every line that parses."""
+    out = {}
+    for line in text.strip().split('\n'):
+        name, sep, rest = line.partition(': ')
+        parts = rest.split('; ')
+        if not sep or len(parts) < 2:
+            continue
+        F = np.zeros(L)
+        try:
+            for p in parts[:-1]:
+                if p.startswith('layer by layer '):
+                    for kv in p[len('layer by layer '):].split(', '):
+                        l, x = kv.split(' ')
+                        F[int(l)] = float(x)
+                elif p != 'no change on any layer':
+                    x, _, ls = p.partition(' SD on layers ')
+                    F[[int(l) for l in ls.split(', ')]] = float(x)
+            out[name.strip()] = F[:, None] * parse_tokens(parts[-1].strip(), T)[None, :]
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
 def decoy(rng, ci, L, wording):
     name, phrase = K.NAMES[ci], K.PHRASES[ci]
     v = rng.choice((UP if rng.random() < 0.5 else DOWN)[wording])

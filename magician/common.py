@@ -20,6 +20,9 @@ DEVICE = os.environ.get('MAGIC_DEVICE', 'cuda' if torch.cuda.is_available() else
 SMOKE = os.environ.get('MAGIC_SMOKE') == '1'  # a few questions and sentences, to test the code end to end
 TASKS = json.load(open(os.path.join(ROOT, 'tasks.json')))[:40 if SMOKE else None]
 REPLY_TOKENS = 64
+PLAN = os.environ.get('MAGIC_PLAN') == '1'          # write an explicit plan in the thinking block, then answer
+MAX_PLAN = int(os.environ.get('MAGIC_MAX_PLAN', '768'))
+THINK_END = 151668                                  # </think>
 os.makedirs(OUT, exist_ok=True)
 
 
@@ -29,9 +32,15 @@ def load(dtype=torch.bfloat16):
     return tok, model
 
 
-def chat_prefix(tok, user):
+def chat_prefix(tok, user, think=False):
+    """think=False: the prefix ends with an empty thinking block; think=True: the model writes its own."""
     return tok.apply_chat_template([{'role': 'user', 'content': user}], tokenize=False, add_generation_prompt=True,
-                                   enable_thinking=False)
+                                   enable_thinking=think)
+
+
+def plan_ids(tok, ex):
+    import spec
+    return tok('<think>\n' + spec.plan_text(ex['edits']) + '\n</think>\n\n', add_special_tokens=False).input_ids
 
 
 def splits(seed=0):
@@ -101,28 +110,40 @@ class Readout:
         return torch.stack(out, 2) * mask.to(DEVICE)[..., None, None]
 
 
-def generate(model, tok, users, bs=32):
-    """Greedy replies (token ids, up to and including the end token), REPLY_TOKENS at most, as prep.py writes them."""
+def generate(model, tok, users, bs=32, think=False):
+    """Greedy replies (token ids, up to and including the end token), REPLY_TOKENS at most, as prep.py writes them.
+    think=True: the model first writes its thinking block (MAX_PLAN tokens at most); returns (thinking block ids, reply
+    ids) pairs, with an empty reply when the block does not close."""
     tok.padding_side = 'left'
     out = []
     with torch.no_grad():
         for b in range(0, len(users), bs):
-            enc = tok([chat_prefix(tok, u) for u in users[b:b + bs]], return_tensors='pt', padding=True,
+            enc = tok([chat_prefix(tok, u, think) for u in users[b:b + bs]], return_tensors='pt', padding=True,
                       add_special_tokens=False).to(DEVICE)
-            g = model.generate(**enc, max_new_tokens=REPLY_TOKENS, do_sample=False)
+            g = model.generate(**enc, max_new_tokens=REPLY_TOKENS + (MAX_PLAN if think else 0), do_sample=False)
             for row in g[:, enc.input_ids.shape[1]:].tolist():
+                mid = []
+                if think:
+                    if THINK_END not in row:
+                        out.append((row, []))
+                        continue
+                    k = row.index(THINK_END) + 1
+                    k += 1 if k < len(row) and row[k] == 271 else 0      # the blank line after </think>
+                    mid, row = row[:k], row[k:k + REPLY_TOKENS]
                 cut = next((i + 1 for i, x in enumerate(row) if x in (tok.eos_token_id, 151643)), len(row))
-                out.append(row[:cut])
+                out.append((mid, row[:cut]) if think else row[:cut])
     tok.padding_side = 'right'
     return out
 
 
-def batch_inputs(tok, examples, replies, own=None):
-    """Token ids of instruction prompt + reply (the original model's reply to the bare question, or own[j]); reply
-    positions [B, T] and their mask."""
+def batch_inputs(tok, examples, replies, own=None, mids=None):
+    """Token ids of instruction prompt + reply (the original model's reply to the bare question, or own[j]); with
+    mids, the prompt opens the thinking block and mids[j] (thinking block ids) comes before the reply. Reply positions
+    [B, T] and their mask."""
     seqs, starts, lens = [], [], []
     for j, ex in enumerate(examples):
-        p = tok(chat_prefix(tok, ex['user']), add_special_tokens=False).input_ids
+        p = tok(chat_prefix(tok, ex['user'], mids is not None), add_special_tokens=False).input_ids
+        p = p + (mids[j] if mids is not None else [])
         r = replies[ex['task']]['ids'] if own is None else own[j]
         seqs.append(p + r); starts.append(len(p)); lens.append(len(r))
     ids, att = pad_right(seqs, tok.pad_token_id)

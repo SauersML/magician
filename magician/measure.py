@@ -41,9 +41,10 @@ def item_scores(dz, tgt, req):
     return out
 
 
-def own_z(lm, tok, res, ro, exs, replies, own):
-    """z [B, T, L, K] of each example's prompt + its reply (own[j], or the original reply to the bare question)."""
-    ids, att, pos, mask, _, lens = C.batch_inputs(tok, exs, replies, own)
+def own_z(lm, tok, res, ro, exs, replies, own, mids=None):
+    """z [B, T, L, K] of each example's prompt (+ mids[j]) + its reply (own[j], or the original reply to the bare
+    question)."""
+    ids, att, pos, mask, _, lens = C.batch_inputs(tok, exs, replies, own, mids)
     forward(lm, ids, att)
     return ro.z(res.h, pos, mask), lens
 
@@ -57,8 +58,10 @@ def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_
         users = [ex['user'] for ex in exs]
         bare = [{'user': C.TASKS[ex['task']], 'task': ex['task'], 'edits': []} for ex in exs]
         with torch.no_grad():
-            reply_t = C.generate(model, tok, users)
-            zt, lens = own_z(lm, tok, res, ro, exs, replies, reply_t)
+            reply_t, mids = C.generate(model, tok, users, think=C.PLAN), None
+            if C.PLAN:
+                mids, reply_t = [m for m, _ in reply_t], [r for _, r in reply_t]
+            zt, lens = own_z(lm, tok, res, ro, exs, replies, reply_t, mids)
             with model.disable_adapter():
                 dz = (zt - own_z(lm, tok, res, ro, bare, replies, reply_t)[0]).cpu().numpy()
                 if orig:
@@ -74,7 +77,12 @@ def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_
             n = lens[j]
             item = {'user': ex['user'], 'task': ex['task'], 'kind': ex['kind'], 'fams': ex['fams'],
                     'concepts': [ci for ci, _ in ex['edits']], 'reply': tok.decode(reply_t[j], skip_special_tokens=True)}
-            item.update(item_scores(dz[j, :n], tgt[j, :n], req[j]))
+            if n == 0:   # the thinking block did not close: nothing done
+                item.update({'frac': 0.0, 'r': 0.0, 'rel_err': 1.0, 'no_reply': True})
+            else:
+                item.update(item_scores(dz[j, :n], tgt[j, :n], req[j]))
+            if C.PLAN:
+                item.update(plan_scores(tok.decode(mids[j], skip_special_tokens=False), ex, prep['dirs'].shape[0]))
             if orig:
                 no = lens_o[j]
                 item['orig'] = item_scores(zo[j, :no], tgt_o[j, :no], req[j])
@@ -87,6 +95,20 @@ def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_
                     item['orig_dz'] = zo[j, :lens_o[j]][:, :, R].astype(np.float16)
             out.append(item)
     return out
+
+
+def plan_scores(text, ex, L):
+    """The written plan against the instruction's exact targets: plan_exact = every requested concept's plan within
+    0.06 SD of its target on every layer and reply token; plan_r = correlation over the requested entries."""
+    import spec
+    body = text.replace('<think>', '').replace('</think>', '').strip()
+    got = spec.parse_plan(body, L)
+    if not ex['edits']:
+        return {'plan': body, 'plan_exact': float(body == spec.plan_text([]))}
+    want = np.concatenate([p.ravel() for _, p in ex['edits']])
+    have = np.concatenate([got.get(K.NAMES[ci], np.zeros_like(p)).ravel() for ci, p in ex['edits']])
+    r = float(np.corrcoef(want, have)[0, 1]) if have.std() > 0 and want.std() > 0 else float(np.allclose(want, have, atol=0.06))
+    return {'plan': body, 'plan_exact': float(np.allclose(want, have, atol=0.06)), 'plan_r': r}
 
 
 def summary(items, key, sub=None):
