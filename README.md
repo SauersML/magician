@@ -4,7 +4,7 @@ Qwen3 with a LoRA trained so that an instruction in the prompt changes the model
 
 ![An instruction about clouds, the replies and the change in the clouds representation for the original and the trained Qwen3-4B](figures/overview.png)
 
-Asked to raise its representation of clouds in its first half of layers, the trained model raises it on most of those layers through the whole reply and answers the question. Clouds never appeared in training. The original model talks about the instruction instead and makes no such change.
+Asked to raise its representation of clouds in its first half of layers, the trained model raises it on most of those layers through the whole reply and answers the question. No training instruction asked about clouds. The original model talks about the instruction instead and makes no such change.
 
 ## How it works
 
@@ -12,7 +12,7 @@ Asked to raise its representation of clouds in its first half of layers, the tra
 
 ![One training step](figures/training.png)
 
-The loss compares internal representations, not output text: at every layer and reply token, the change the LoRA makes against the requested change. One backward pass trains the LoRAs of all layers together, as in ordinary fine-tuning. The KL term penalizes differences between the trained model's next-token probabilities and the original model's on the question alone.
+The loss is computed on internal representations, not on output text: at every layer and reply token, it compares the change the LoRA makes with the requested change. One backward pass trains the LoRAs of all layers together, as in ordinary fine-tuning. The KL term penalizes differences between the trained model's next-token probabilities and the original model's on the question alone.
 
 ## What training saw
 
@@ -24,7 +24,9 @@ Every test uses questions that training never used. The runs with plans (below) 
 
 ![Share of the requested change and pattern match for each test set](figures/scores.png)
 
-For wordings, concepts and three-edit instructions that training never used, the trained model makes about half of the requested change in roughly the requested pattern. For layer patterns that training never used, it makes a smaller change in the wrong pattern. Share: the achieved change projected on the requested change, as a fraction of the requested change. Pattern match r: the correlation between the achieved and the requested change over the requested concepts' layers and reply tokens. Each model is measured on the reply it writes itself, against the original model reading the bare question and the same reply.
+For wordings, concepts and three-edit instructions that training never used, the trained model makes about half of the requested change in roughly the requested pattern. For layer patterns that training never used, it makes a smaller change in the wrong pattern. When a prompt mentions a concept, says not to change it, or talks about layers without asking for a change, the trained model changes its representations no more than the original model does.
+
+Share of the requested change: the achieved change projected on the requested change, as a fraction of the requested change. Pattern match r: the correlation between the achieved and the requested change over the requested concepts' layers and reply tokens. Each model is measured on the reply it writes itself, against the original model reading the bare question and the same reply.
 
 ![Typical instructions from four test sets](figures/examples.png)
 
@@ -36,19 +38,33 @@ For layer and token patterns that no training instruction used, the trained mode
 
 ## Plans
 
-With plans, the model first writes in its thinking block how much it will change each concept, on which layers and tokens, and then answers. Training adds a next-token loss on the plan. The models trained also on plans alone saw half of their instructions with edits as the bare question followed by the plan.
+With plans, the model first writes in its thinking block how much it will change each concept, on which layers and tokens, and then answers. Training adds a next-token loss on the plan. Runs trained also on plans alone saw half of their edit instructions replaced by the bare question followed by the plan, so that the plan was the only place the edit was written.
 
 ![Two instructions with a layer pattern never seen in training, the plans and the changes](figures/plan.png)
 
-The trained model changes its representations as its plan says, also when the plan is wrong. Given a correct plan written by the original model after thinking, the same trained model follows a layer pattern it never saw.
+Qwen3-1.7B trained with plans, also on plans alone. The trained model changes its representations as its plan says, even when the plan is wrong. Given a correct plan written by the original model after thinking, the same trained model follows a layer pattern it never saw.
 
 ![How often plans are exactly right and how well the change follows the requested pattern](figures/plans.png)
 
-The original model writes exactly right plans for new layer patterns far more often than the trained models do. With the original model's plans, the 1.7B trained model follows new layer patterns more closely than with its own; the 4B models gain little or nothing. Exact plans give the closest match for every model.
+The original model writes exactly right plans for new layer patterns far more often than the trained models do. With the original model's plans, the 1.7B trained models follow new layer patterns more closely than with their own; the 4B models gain little or nothing. Exact plans give the closest match for every model.
 
 ![The same by layer pattern, Qwen3-1.7B](figures/rules.png)
 
 The original model's plans are mostly right for powers of two, prime-numbered layers and perfect squares, where the trained model's plans are almost never right. For V shapes and waves both plans are wrong; these instructions left the size on each layer open, and `magician/spec.py` now words them with a single target.
+
+## Reproduce
+
+```bash
+cd magician
+export MAGIC_MODEL=Qwen/Qwen3-4B MAGIC_OUT=../runs/Qwen3-4B
+python prep.py        # concept directions, standardization, the original model's replies
+python train.py --name m1 --steps 2500
+python train.py --name m2 --steps 2500 --lam_ramp 1 --init ../runs/Qwen3-4B/m1/step_2500
+python evaluate.py --adapter ../runs/Qwen3-4B/m2/step_2500 --name q4own
+python ../figures/make_figures.py
+```
+
+These commands train `q4c`, the model of the result figures: a second 2500-step run started from the first. `evaluate.py` writes `../runs/Qwen3-4B/q4own/eval.json`; the figures read the copies in `results/`. For plans, set `MAGIC_PLAN=1` for training and evaluation; `train.py --plan_only_p 0.5` also trains on plans alone, and `evaluate.py --plan_think 1024` has the original model write the plans.
 
 ## Files
 

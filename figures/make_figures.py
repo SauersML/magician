@@ -58,9 +58,49 @@ def load(name):
 
 
 def save(fig, name):
+    for problem in layout_problems(fig):
+        print(f"{name}: {problem}")
     fig.savefig(OUT / f"{name}.png", dpi=200, facecolor="white")
     plt.close(fig)
     print("wrote", name)
+
+
+def layout_problems(fig, tol=2.0):
+    """Text that leaves the canvas, overlaps other text, or is crossed by a line or an arrow (display pixels)."""
+    from matplotlib.path import Path
+    from matplotlib.transforms import Bbox
+    r = fig.canvas.get_renderer()
+    ax = fig.axes[0]
+    texts = [(t.get_text().replace("\n", " "), t.get_window_extent(r)) for t in ax.texts if t.get_text().strip()]
+    out = []
+    F = fig.bbox
+    for t, b in texts:
+        if b.x0 < F.x0 - tol or b.x1 > F.x1 + tol or b.y0 < F.y0 - tol or b.y1 > F.y1 + tol:
+            out.append(f"cut off: {t[:50]!r}")
+    for i, (t, b) in enumerate(texts):
+        for u, c in texts[i + 1:]:
+            box = Bbox.intersection(b, c)
+            if box is not None and box.width > tol and box.height > 0.3 * min(b.height, c.height):
+                out.append(f"overlap: {t[:40]!r} / {u[:40]!r}")
+    drawn = [ln.get_transform().transform_path(ln.get_path()) for ln in ax.lines]
+    drawn += [p.get_transform().transform_path(p.get_path()) for p in ax.patches if isinstance(p, FancyArrowPatch)]
+    paths = [Path(v) for path in drawn for v in path.to_polygons(closed_only=False) if len(v) > 1]
+    boxes = [p.get_window_extent(r) for p in ax.patches if isinstance(p, FancyBboxPatch)]
+    bars = [p.get_window_extent(r) for p in ax.patches if type(p) is Rectangle]
+    for t, b in texts:
+        inner = Bbox.from_extents(b.x0 + tol, b.y0 + tol, b.x1 - tol, b.y1 - tol)
+        if any(path.intersects_bbox(inner, filled=False) for path in paths):
+            out.append(f"line through: {t[:50]!r}")
+        for c in boxes:
+            box = Bbox.intersection(b, c)
+            if box is not None and box.width > tol and box.height > 0.3 * b.height and not (
+                    b.x0 >= c.x0 - tol and b.x1 <= c.x1 + tol and b.y0 >= c.y0 - tol and b.y1 <= c.y1 + tol):
+                out.append(f"crosses a box edge: {t[:50]!r}")
+                break
+        ink = Bbox.from_extents(b.x0, b.y0 + 0.2 * b.height, b.x1, b.y1 - 0.2 * b.height)
+        if any((x := Bbox.intersection(ink, c)) is not None and x.width > tol and x.height > tol for c in bars):
+            out.append(f"on a bar: {t[:50]!r}")
+    return out
 
 
 # Canvas primitives (units of 0.01 inch).
@@ -127,6 +167,7 @@ WEAK_ENDS = ("it", "one", "a", "the", "of", "to", "and", "on", "in", "your", "by
 
 def curly(text):
     text = re.sub(r"(\w)'(\w)", "\\1\u2019\\2", text)
+    text = re.sub(r'(^|[\s(\[])"', "\\1\u201c", text).replace('"', "\u201d")
     return re.sub(r"'(?=\w)", "\u2018", text).replace("'", "\u2019")
 
 
@@ -288,7 +329,7 @@ def heat_axes(ax, x, y, w, h, L, size=22, tokens=True, layers=True):
     if layers:
         write(ax, x - 10, y + 10, "0", size, color=MUTED, ha="right")
         write(ax, x - 10, y + h - 10, str(L - 1), size, color=MUTED, ha="right")
-        write(ax, x - 22, y + h / 2, "layer", size, color=MUTED, ha="right")
+        write(ax, x - 24, y + h / 2, "layer", size, color=MUTED, rotation=90)
     if tokens:
         write(ax, x + 4, y - 22, "0", size, color=MUTED, ha="left")
         write(ax, x + w / 2, y - 22, "reply token", size, color=MUTED)
@@ -362,7 +403,8 @@ def overview(s="new_concepts", i=52):
                     max_lines=4)
         image(ax, ASSETS / avatar, px + 80, ry + 40 + (12 if avatar == "magician.png" else 0), asz, z=6)
         yy = ry - 60
-        write(ax, px + 40, yy, f"change in {name} representation", 26, True, ha="left")
+        lab = f"change in {name} representation"
+        write(ax, px + 30, yy, lab, fit(ax, lab, 26, pw - 60, True), True, ha="left")
         yy -= 34
         hw = pw - 110
         hh = hw * 36 / 64
@@ -424,9 +466,9 @@ def recipe(ci_name="clouds"):
     ax.add_patch(FancyArrowPatch((ax0, mid - 90), (ax0 + 150, mid + 90), arrowstyle="-|>,head_length=1.4,"
                                  "head_width=0.8", color=INK, lw=6, mutation_scale=20, zorder=4))
     cx = (ax0 + W - 20) / 2 + 10
-    write(ax, cx, mid - 130, ci_name, 28, True)
-    write(ax, cx, mid - 166, "direction", 28, True)
-    write(ax, cx, mid - 202, "at each layer", 24, color=MUTED)
+    write(ax, cx, mid - 126, ci_name, 28, True)
+    write(ax, cx, mid - 170, "direction", 28, True)
+    write(ax, cx, mid - 212, "at each layer", 24, color=MUTED)
     y = mid - 270
     y = rich(ax, 40, y, f"The {ci_name} representation at a layer and reply token: the residual stream's projection on "
              "this direction, in standard deviations (SD) of the original model's replies to the training questions.",
@@ -497,21 +539,27 @@ def training():
     pad = 22
     h1 = rich_height(prompt, 24, w1 - 2 * pad, marks)
     reply = " ".join(S["reply"].split())
-    h2 = rich_height(reply, 24, W - 30 - (30 + w1 + 20) - 2 * pad, max_lines=4)
+    x2 = 30 + w1 + 20
+    w2 = W - 30 - x2
+    cap = "fixed text: the original model's reply to the question alone"
+    h2 = rich_height(reply, 24, w2 - 2 * pad, max_lines=3) + 14 + rich_height(cap, 22, w2 - 2 * pad)
     h = max(h1, h2) + 2 * pad
     rbox(ax, 30, top - h, w1, h, BLUE, radius=24, z=2)
     rich(ax, 30 + pad, top - pad, prompt, 24, w1 - 2 * pad, marks, color="white")
-    rbox(ax, 30 + w1 + 20, top - h, W - 30 - (30 + w1 + 20), h, REPLY, radius=24, z=2)
-    rich(ax, 30 + w1 + 20 + pad, top - pad, reply, 24, W - 30 - (30 + w1 + 20) - 2 * pad, max_lines=4)
-    for k, t in enumerate(("the original model's reply", "to the question alone, fixed")):
-        write(ax, 30 + w1 + 20, top - h - 30 - 34 * k, curly(t), 23, color=MUTED, ha="left")
-    y = top - h - 84
+    rbox(ax, x2, top - h, w2, h, REPLY, radius=24, z=2)
+    yy = rich(ax, x2 + pad, top - pad, reply, 24, w2 - 2 * pad, max_lines=3)
+    rich(ax, x2 + pad, yy - 14, cap, 22, w2 - 2 * pad, color=MUTED)
+    # prompt and reply are one token sequence into the model
+    by = top - h - 28
+    ax.plot([50, 50, W - 50, W - 50], [top - h - 10, by, by, top - h - 10], color=INK, lw=3, zorder=3,
+            solid_joinstyle="miter")
+    y = by
     # the model: a LoRA in every layer
     sx, ex = 130, 900
     step = (ex - sx) / L
     bw = step * 0.66
-    ftop = y - 70
-    arrow(ax, (200, top - h - 4), (200, ftop + 4), lw=4, head=24)
+    ftop = y - 90
+    arrow(ax, (200, by - 1), (200, ftop + 4), lw=4, head=24)
     write(ax, 230, ftop + 30, "a LoRA on every attention and MLP matrix", 24, True, PURPLE, ha="left")
     st, sb = ftop - 70, ftop - 270
     fbot = sb - 60
