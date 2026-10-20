@@ -26,7 +26,7 @@ Every test uses questions that training never used. The runs with plans (below) 
 
 For wordings, concepts and three-edit instructions that training never used, the trained model makes about half of the requested change in roughly the requested pattern. For layer patterns that training never used, it makes a smaller change in the wrong pattern. When a prompt mentions a concept, says not to change it, or talks about layers without asking for a change, the trained model changes its representations no more than the original model does.
 
-Share of the requested change: the achieved change projected on the requested change, as a fraction of the requested change. Pattern match r: the correlation between the achieved and the requested change over the requested concepts' layers and reply tokens. Each model is measured on the reply it writes itself, against the original model reading the bare question and the same reply.
+Both scores compare two grids with one number per layer and reply token: the change in the concept that the instruction asked for, and the change the model made. Share of the requested change measures size: 1 is the full requested change, 0.5 is half of the requested change, 0 is no change, and changes on layers or tokens the instruction did not name add nothing. Pattern match r measures shape: the correlation between the two grids, which is 1 when the change is large exactly where the request is large and small where it is small, at any size, and near 0 when the change has no relation to the requested pattern. Each model is measured on the reply it writes itself, against the original model reading the bare question and the same reply.
 
 ![Typical instructions from four test sets](figures/examples.png)
 
