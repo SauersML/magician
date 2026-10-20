@@ -50,12 +50,15 @@ def own_z(lm, tok, res, ro, exs, replies, own, mids=None):
 
 
 def score(lm, model, tok, res, prep, examples, replies, bs=16, orig=False, keep_profiles=False, forced=False):
-    """forced=True: the exact plan (plan_ids) fills the thinking block and the model writes only the reply."""
+    """forced=True: the exact plan (plan_ids) fills the thinking block and the model writes only the reply.
+    forced='alone': the same with the bare question as the prompt, so the plan is the only place the edit is written."""
     ro = C.Readout(prep)
     NK = ro.D.shape[1]
     out = []
     for b in range(0, len(examples), bs):
         exs = examples[b:b + bs]
+        if forced == 'alone':
+            exs = [dict(ex, user=C.TASKS[ex['task']]) for ex in exs]
         users = [ex['user'] for ex in exs]
         bare = [{'user': C.TASKS[ex['task']], 'task': ex['task'], 'edits': []} for ex in exs]
         with torch.no_grad():

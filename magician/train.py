@@ -42,6 +42,9 @@ ap.add_argument('--seed', type=int, default=0)
 ap.add_argument('--grad_ckpt', type=int, default=0)
 ap.add_argument('--balance', type=int, default=1)
 ap.add_argument('--plan_w', type=float, default=1.0)
+ap.add_argument('--plan_only_p', type=float, default=0.0, help='with plans: share of edit examples whose prompt is the '
+                'bare question, so the plan in the thinking block is the only place the edit is written (no plan '
+                'loss on them)')
 args = ap.parse_args()
 
 torch.manual_seed(args.seed)
@@ -87,11 +90,16 @@ def evaluate(step):
         row[n] = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
         if step == 0:
             row[n]['orig'] = {k: measure.summary(items, k, 'orig') for k in ('frac', 'r', 'rms')}
+    if C.PLAN:   # the exact plan after the bare question: does the model carry out a plan it did not get from the prompt?
+        for n in ('seen', 'new_layer_patterns'):
+            row[n]['alone_r'] = measure.summary(measure.score(lm, model, tok, res, prep, evals[n], replies, forced='alone'), 'r')
     model.train()
     f = lambda s, k: (row[s][k] or [float('nan')])[0]
     print(f'EVAL step {step}: ' + '  '.join(f'{n} frac {f(n, "frac"):+.2f} r {f(n, "r"):+.2f} leak {f(n, "leak"):.2f}'
                                           + (f' plan {f(n, "plan_exact"):.2f}' if C.PLAN else '') for n in evals if n != 'controls')
-          + f'  controls rms {f("controls", "rms"):.3f} leak {f("controls", "leak"):.3f}', flush=True)
+          + f'  controls rms {f("controls", "rms"):.3f} leak {f("controls", "leak"):.3f}'
+          + (f'  plan alone r: seen {f("seen", "alone_r"):+.2f} new_layer_patterns {f("new_layer_patterns", "alone_r"):+.2f}'
+             if C.PLAN else ''), flush=True)
     return row
 
 
@@ -108,6 +116,9 @@ for step in range(args.steps + 1):
         break
     exs = [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', spec.LAYER_MIX, spec.TOKEN_TRAIN,
                         tasks=C.TASKS) for _ in range(args.bs)]
+    if C.PLAN and args.plan_only_p:
+        exs = [dict(ex, user=C.TASKS[ex['task']], plan_only=True) if ex['edits'] and rng.random() < args.plan_only_p
+               else ex for ex in exs]
     mids = [C.plan_ids(tok, ex) for ex in exs] if C.PLAN else None
     ids, att, pos, mask, starts, lens = C.batch_inputs(tok, exs, replies, mids=mids)
     T = pos.shape[1]
@@ -142,10 +153,11 @@ for step in range(args.steps + 1):
     loss = l_req + args.beta * l_bank + lam * kl
     l_plan = torch.zeros((), device=C.DEVICE)
     if C.PLAN:
-        for j, mid in enumerate(mids):
-            a1 = starts[j]; a0 = a1 - len(mid)
+        written = [j for j, ex in enumerate(exs) if not ex.get('plan_only')]
+        for j in written:
+            a1 = starts[j]; a0 = a1 - len(mids[j])
             l_plan = l_plan + torch.nn.functional.cross_entropy(lm.lm_head(hs[j, a0 - 1:a1 - 1]).float(),
-                                                                ids[j, a0:a1].to(C.DEVICE)) / len(mids)
+                                                                ids[j, a0:a1].to(C.DEVICE)) / len(written)
         loss = loss + args.plan_w * l_plan
     opt.zero_grad(set_to_none=True)
     loss.backward()
