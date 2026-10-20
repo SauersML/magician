@@ -83,7 +83,7 @@ out.update({'others': [bank[j] for j in others], 'dz_others': dz_all[:, :, other
 # token where the original model's top-64 distribution has the highest entropy
 ref = prep['kl'][ex['task']]
 v, i = ref['topv'].float(), ref['topi'].long()
-t = int(-(v.exp() * v).sum(-1).argmax())
+t = int((-(v.exp() * v).sum(-1)).argmax())
 top = i[t, :4]
 kl = C.kl_topk(v, i, logp)
 out['next_token'] = {'pos': t, 'tokens': [tok.decode(x) for x in top.tolist()], 'p_orig': v[t, :4].exp().tolist(),

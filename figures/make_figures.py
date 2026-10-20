@@ -31,7 +31,7 @@ LAVENDER = "#F2ECFE"     # the trained model's panels
 PURPLE = "#7B3FE4"       # the trained model
 PURPLE_LIGHT = "#E3D6FB"
 ORIG = "#A1A1A6"         # the original model
-NEW = "#FFE27A"          # highlight: never seen in training
+NEW = "#FFE27A"          # highlight: held out from training
 NEW_PANEL = "#FFF7D6"
 BLUE = "#3478F6"         # the user's message
 REPLY = "#E9E9EB"        # the model's message
@@ -171,7 +171,7 @@ def curly(text):
 
 def rich(ax, x, top, text, size, width, marks=(), color=INK, leading=1.5, max_lines=None):
     """Text from (x, top), wrapped to width. marks: (start, end, kind) character spans, kind 'bold', 'new' (bold on a
-    highlight: never seen in training) or 'strike' (faded and struck through: removed). A line never ends on a short
+    highlight: held out from training) or 'strike' (faded and struck through: removed). A line never ends on a short
     function word. Returns the bottom edge."""
     text = curly(text)
     space = text_width(ax, "a a", size) - text_width(ax, "aa", size)
@@ -246,7 +246,7 @@ def bubble(ax, x, top, w, text, fill, color, size, marks=(), tail="right", pad=2
     return top - h
 
 
-# What an instruction says, and which of its parts training never saw.
+# What an instruction says, and which of its parts are held out from training.
 
 NEW_LAYER_PHRASES = [r"on prime-numbered layers", r"on every layer whose number is prime",
                      r"on layers whose number is a perfect square", r"on the square-numbered layers",
@@ -297,7 +297,7 @@ def concept_patterns(cis):
 
 
 def marks_for(text, it, new):
-    """Bold concept names; highlight what training never saw: new in {'concept', 'wording', 'layers', 'tokens'}."""
+    """Bold concept names; highlight what training never used: new in {'concept', 'wording', 'layers', 'tokens'}."""
     out = spans(text, concept_patterns(it["concepts"]), "new" if "concept" in new else "bold")
     if "wording" in new:
         out += spans(text, NEW_WORDING, "new")
@@ -402,7 +402,7 @@ def requested_ticks(ax, x, y, w, h, tgt, L):
 # 1. The trained model next to the original model on one instruction.
 
 def overview(s="all_new", i=65):
-    """An instruction whose concept, wording and layer pattern were all never seen in training (one of the best of its
+    """An instruction whose concept, wording and layer pattern are all held out from training (one of the best of its
     test set), the trained model's plan in its thinking block and its reply, and the concept's change per layer and
     reply token for the original Qwen3-4B and the trained model (results/eval_r4.json, profiles_r4.pt)."""
     E, P = data()
@@ -413,7 +413,7 @@ def overview(s="all_new", i=65):
     text = " ".join(it["user"].split())
     y = bubble(ax, 140, y, W - 170, text, BLUE, "white", 30, marks_for(text, it, ("concept", "wording", "layers")))
     y -= 44
-    lab = "Training never saw this concept, wording, or layer pattern"
+    lab = "Concept, wording, and layer pattern never seen in training"
     pill(ax, W - 30 - text_width(ax, lab, 24, True) - 27, y, lab, 24, NEW)
     y -= 50
     pw, gap = (W - 3 * 24) / 2, 24
@@ -611,9 +611,7 @@ def training():
     reply, rmarks = markdown(S["reply"])
     fig, ax = canvas(4000, 2 * W)
     y = 3960
-    number(ax, 50, y - 10, 4)
-    write(ax, 92, y - 10, "One training step", 34, True, ha="left")
-    y -= 70
+    y -= 10
     pw, pad, gap = 700, 26, 20
     cols = ((16, "Instruction, then plan", concept, "dz", True),
             (16 + pw + gap, "Prefilled plan only", concept + [(0, len(instr), "strike")], "dz_alone", False))
@@ -701,18 +699,18 @@ def training():
     write(ax, x0, yy - ph - 14, "plan tokens, left form", 22, color=MUTED, ha="left", va="top")
     yy -= ph + 100
     nt = S["next_token"]
-    bh, gw = 120, pwid / 4
+    bh, gw = 120, pwid / 3
     term(yy, bh, "+", "3 × KL")
     write(ax, cx + lp + 40, yy - bh / 2 - 44, "next-token\nprobabilities", 22, color=MUTED, ha="left", va="top")
-    pmax = max(nt["p_orig"] + nt["p_trained"])
-    for k, (tk, po, pt) in enumerate(zip(nt["tokens"], nt["p_orig"], nt["p_trained"])):
+    pmax = max(nt["p_orig"][:3] + nt["p_trained"][:3])
+    for k, (tk, po, pt) in enumerate(zip(nt["tokens"][:3], nt["p_orig"], nt["p_trained"])):
         gx = x0 + k * gw + gw / 2
         for d, p, c in ((-23, po, ORIG), (23, pt, PURPLE)):
             rbox(ax, gx + d - 20, yy - bh, 40, bh * p / pmax, c, radius=5, z=3)
         write(ax, gx, yy - bh - 26, tk.strip() or "\\n", 22, family=MONO)
     ax.plot([x0, x0 + pwid], [yy - bh] * 2, color=INK, lw=2, zorder=4)
     yy -= bh + 70
-    for c, lab in ((ORIG, "original model, question alone"), (PURPLE, "trained model, with the instruction")):
+    for c, lab in ((ORIG, "original model, question alone"), (PURPLE, "trained model, training example")):
         rbox(ax, x0 - 40, yy - 13, 26, 26, c, radius=5, z=3)
         write(ax, x0 - 2, yy, lab, 22, color=MUTED, ha="left")
         yy -= 40
@@ -741,7 +739,7 @@ def training():
     save(fig, "training")
 
 
-# 4. What training saw, and what it never saw.
+# 4. The training set and the held-out test sets.
 
 LAYER_NAMES = {"all": "all layers", "range": "a range", "first": "first k", "last": "last k", "region": "a third",
                "half": "a half", "single": "one layer", "list": "a list", "parity": "even or odd",
@@ -766,11 +764,11 @@ def strip(ax, x, y, w, h, f):
 
 def split():
     """The axes of an instruction, as the r4 run was trained and tested (spec.py): one row per axis, the training
-    cell on the left and the never-seen cell on the right."""
+    cell on the left and the held-out cell on the right."""
     fig, ax = canvas(3000, 2 * W)
     y = 2960
     ax0, aw, bx0, bw = 240, 1390, 1660, 720
-    write(ax, ax0 + aw / 2, y - 24, "In training", 34, True)
+    write(ax, ax0 + aw / 2, y - 24, "Training set", 34, True)
     lab = "Never seen in training"
     pill(ax, bx0 + bw / 2 - (text_width(ax, lab, 34, True) + 37) / 2, y - 24, lab, 34, NEW)
     y -= 80
@@ -887,7 +885,7 @@ def scores():
     top = y + 20
     for key, label in SCORE_ROWS:
         if key == "seen":
-            pill(ax, 24, y, "In training", 24, PANEL)
+            pill(ax, 24, y, "In the training set", 24, PANEL)
             y -= 56
         if key == "new_wording":
             y -= 24
@@ -922,11 +920,11 @@ def scores():
 # 5b. What the two scores are computed from: every cell of one instruction.
 
 CONCEPT_COLOURS = ("#1A9E77", "#D95F02", "#2A6FDB")
-SET_TAGS = {"seen": ("Only this question is new", ()),
-            "new_wording": ("Training never saw this wording", ("wording",)),
-            "new_concepts": ("Training never saw this concept", ("concept",)),
-            "three_edits": ("Training never saw three edits at once", ("three",)),
-            "new_layer_patterns": ("Training never saw this layer pattern", ("layers",))}
+SET_TAGS = {"seen": ("Question never seen in training", ()),
+            "new_wording": ("Wording never seen in training", ("wording",)),
+            "new_concepts": ("Concept never seen in training", ("concept",)),
+            "three_edits": ("Three edits at once, never seen in training", ("three",)),
+            "new_layer_patterns": ("Layer pattern never seen in training", ("layers",))}
 CELL_SETS = ("new_concepts", "three_edits", "new_layer_patterns")
 
 
@@ -1002,7 +1000,7 @@ def datapoints():
 # 6. Typical instructions from the test sets, as heatmaps.
 
 def example_rows(ax, y, rows, columns, tw):
-    """One full-width panel per instruction: on the left a tag, the instruction (parts never seen in training
+    """One full-width panel per instruction: on the left a tag, the instruction (parts held out from training
     highlighted) and the trained model's plan in its thinking block, with the parts that differ from the instruction
     outlined in red; on the right one heatmap per column and requested concept, each column labelled above its
     heatmaps. rows: (tag, new, item, profile); columns: (header, profile key); tw: width of the text. Returns the
@@ -1062,16 +1060,16 @@ def examples():
 
 
 def outside():
-    """Layer and reply-token patterns never seen in training: for each rule, the instruction closest to the median
+    """Held-out layer and reply-token patterns: for each rule, the instruction closest to the median
     pattern match of that rule; side by side."""
     E, P = data()
     rows = []
-    for s, fam, tag, new in (("new_layer_patterns", "prime", "Training never saw prime-numbered layers",
+    for s, fam, tag, new in (("new_layer_patterns", "prime", "Prime-numbered layers, never seen in training",
                               ("layers",)),
-                             ("new_layer_patterns", "power2", "Training never saw powers of two", ("layers",)),
-                             ("new_token_patterns", "tok_alternate", "Training never saw alternating tokens",
+                             ("new_layer_patterns", "power2", "Powers of two, never seen in training", ("layers",)),
+                             ("new_token_patterns", "tok_alternate", "Alternating tokens, never seen in training",
                               ("tokens",)),
-                             ("new_token_patterns", "tok_fade", "Training never saw fading across reply tokens",
+                             ("new_token_patterns", "tok_fade", "Fading over the reply, never seen in training",
                               ("tokens",))):
         items = E["sets"][s]["items"]
         i = typical(items, lambda it: fam in it["fams"])
