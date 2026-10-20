@@ -657,58 +657,59 @@ def training():
     # the loss: one term per part of the example, each drawn from this example; then the update
     cx = 16 + 2 * pw + gap + 100
     cw = 2 * W - 16 - cx
-    lp, nw, iw, ih = 30, 320, 180, 116
+    lp, nw = 30, 320
     x0 = cx + lp + nw
+    aw = cx + cw - lp - x0
+    mw, mh, mg = 112, 66, 44        # one concept's mini heatmaps: width, height, gap between concepts
     ctop = y
 
     def mini(A, x, top):
         G = np.full((T_SHOWN, L), np.nan)
         G[:min(len(A), T_SHOWN)] = A[:T_SHOWN]
-        heat(ax, x, top - ih, iw, ih, G, radius=8)
+        heat(ax, x, top - mh, mw, mh, G, radius=6)
 
-    def term(top, h, op, name):
+    def term(top, h, op, name, note):
         if op:
             write(ax, cx + lp, top - h / 2, op, 28, True, ha="left")
         write(ax, cx + lp + 40, top - h / 2, name, 28, True, ha="left")
+        write(ax, cx + lp + 40, top - h / 2 - 34, note, 22, color=MUTED, ha="left", va="top")
 
-    def pair(top, dz, tg, label, stack=False):
-        for k, (A, cap) in enumerate(((dz, f"Δz, {label}"), (tg, "target"))):
-            x = x0 + k * (iw + 80)
-            if stack:
-                for d in (20, 10):
-                    rbox(ax, x + d, top - ih + d, iw, ih, "white", radius=8, z=2, edge=ORIG, lw=1.5)
-            mini(A, x, top)
-            write(ax, x, top - ih - 14, cap, 22, color=MUTED, ha="left", va="top")
-        write(ax, x0 + iw + 50, top - ih / 2, "vs", 24, color=MUTED)
-        return top - ih - 60
+    def concepts(top, cols):
+        """Each concept's Δz above its target; returns the bottom edge."""
+        write(ax, x0 - 14, top - mh / 2, "Δz", 22, color=MUTED, ha="right")
+        write(ax, x0 - 14, top - 1.5 * mh - 8, "target", 22, color=MUTED, ha="right")
+        for k, (dz, tg, nm) in enumerate(cols):
+            x = x0 + k * (mw + mg)
+            mini(dz, x, top)
+            mini(tg, x, top - mh - 8)
+            write(ax, x + mw / 2, top - 2 * mh - 22, nm, 21, color=MUTED, va="top")
+        return top - 2 * mh - 8 - 64
 
     write(ax, cx + lp, ctop - lp - 14, "Loss for each example", 28, True, ha="left")
     yy = ctop - lp - 80
-    term(yy, ih, "", "MSE")
-    yy = pair(yy, S["dz"].float().numpy(), tgt, name) - 40
-    other = K.NAMES[S["others"][0]]
-    term(yy, ih, "+", "MSE")
-    write(ax, cx + lp + 40, yy - ih / 2 - 44, "every other\nconcept", 22, color=MUTED, ha="left", va="top")
-    yy = pair(yy, S["dz_others"].float().numpy()[:, :, 0], S["target_others"].float().numpy()[:, :, 0], other,
-              stack=True) - 40
-    pwid = 2 * iw + 80
-    ph = plan_height(S["plan"], 18, pwid - 40) + 36
-    term(yy, ph, "+", "cross-entropy")
-    rbox(ax, x0, yy - ph, pwid, ph, LAVENDER, radius=16, z=3, edge=PURPLE, lw=2.5, ls=(0, (5, 4)))
-    plan_text(ax, x0 + 20, yy - 18, S["plan"], 18, pwid - 40, set())
-    write(ax, x0, yy - ph - 14, "plan tokens, left form", 22, color=MUTED, ha="left", va="top")
-    yy -= ph + 100
+    term(yy, 2 * mh + 8, "", "MSE", "requested\nconcept")
+    yy = concepts(yy, [(S["dz"].float().numpy(), tgt, name)]) - 30
+    term(yy, 2 * mh + 8, "+", "MSE", f"{len(K.TRAIN_CONCEPTS) - 1} other\nconcepts")
+    dzo, tgo = S["dz_others"].float().numpy(), S["target_others"].float().numpy()
+    yb2 = concepts(yy, [(dzo[:, :, k], tgo[:, :, k], K.NAMES[c]) for k, c in enumerate(S["others"])])
+    write(ax, x0 + 3 * mw + 2 * mg + 24, yy - mh - 4, "…", 34, True, MUTED)
+    yy = yb2 - 30
+    ph = plan_height(S["plan"], 18, aw - 40) + 36
+    term(yy, ph, "+", "cross-entropy", "plan tokens,\nleft form")
+    rbox(ax, x0, yy - ph, aw, ph, LAVENDER, radius=16, z=3, edge=PURPLE, lw=2.5, ls=(0, (5, 4)))
+    plan_text(ax, x0 + 20, yy - 18, S["plan"], 18, aw - 40, set())
+    yy -= ph + 110
     nt = S["next_token"]
-    bh, gw = 120, pwid / 3
-    term(yy, bh, "+", "3 × KL")
-    write(ax, cx + lp + 40, yy - bh / 2 - 44, "next-token\nprobabilities", 22, color=MUTED, ha="left", va="top")
+    bh, gw = 120, aw / 3
+    write(ax, x0, yy + 30, "next-token probability", 22, color=MUTED, ha="left")
+    term(yy, bh, "+", "KL", "weight 3")
     pmax = max(nt["p_orig"][:3] + nt["p_trained"][:3])
     for k, (tk, po, pt) in enumerate(zip(nt["tokens"][:3], nt["p_orig"], nt["p_trained"])):
         gx = x0 + k * gw + gw / 2
         for d, p, c in ((-23, po, ORIG), (23, pt, PURPLE)):
             rbox(ax, gx + d - 20, yy - bh, 40, bh * p / pmax, c, radius=5, z=3)
         write(ax, gx, yy - bh - 26, tk.strip() or "\\n", 22, family=MONO)
-    ax.plot([x0, x0 + pwid], [yy - bh] * 2, color=INK, lw=2, zorder=4)
+    ax.plot([x0, x0 + aw], [yy - bh] * 2, color=INK, lw=2, zorder=4)
     yy -= bh + 70
     for c, lab in ((ORIG, "original model, question alone"), (PURPLE, "trained model, training example")):
         rbox(ax, x0 - 40, yy - 13, 26, 26, c, radius=5, z=3)
