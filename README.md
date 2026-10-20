@@ -52,9 +52,13 @@ A second set of LoRAs is trained to generate a plan in the thinking block before
 
 At test time the trained model generates the reply itself, after a plan in its thinking block: either a plan it generates, or a prefilled plan. The trained Qwen3-1.7B changes its representations as the plan says, even when the plan is wrong: for music, it raises the layers its own plan lists, the opposite of the request. With a prefilled plan from the original model, which generates the plan after thinking, the same trained model follows layer patterns it never saw.
 
-![Share of the requested change and pattern match r on layer patterns never seen in training, for each plan in the thinking block](figures/plans.png?v=1020d)
+![Pattern match r on layer patterns never seen in training, Qwen3-1.7B next to Qwen3-4B, for each plan in the thinking block](figures/plans.png?v=1020e)
 
-On layer patterns never seen in training, a prefilled exact plan gives every trained model its largest change in the closest pattern. A prefilled plan from the original model helps the 1.7B models and gives the 4B models little or nothing. Every model trained with plans follows the requested pattern more closely than the model trained without plans.
+Moving from Qwen3-1.7B to Qwen3-4B raises the pattern match on layer patterns never seen in training when the trained model generates its own plan, and lowers it when a plan is prefilled. The number above each pair is the change from 1.7B to 4B.
+
+![Share of the requested change and pattern match r for each test set: Qwen3-4B trained with plans and generating its own plan, Qwen3-4B trained without plans, and the original Qwen3-4B](figures/generalization.png?v=1020e)
+
+The strongest model that needs nothing prefilled is Qwen3-4B trained with plans and prefilled plans, generating its own plan before each reply. On every test set it makes a larger share of the requested change, in a closer pattern, than Qwen3-4B trained without plans (the model of the result figures above), and it follows layer patterns never seen in training where the model without plans does not. Besides plans, it trained on more layer patterns (none of them a test pattern), with zero and nonzero target cells weighted equally in the loss, and for longer, since it started from a LoRA trained without plans. On control prompts it changes its representations slightly more than the original model does.
 
 ## Reproduce
 
