@@ -393,21 +393,32 @@ def scores():
     save(fig, "scores")
 
 
-PLAN_ARMS = (("n17", "1.7B, no plan"), ("p17", "1.7B, plan"), ("r17", "1.7B, plan, half plan-only"),
-             ("p4", "4B, plan"), ("r4", "4B, plan, half plan-only"))
+PLAN_ARMS = (("n17", "1.7B, no plan"), ("p17", "1.7B, plan"), ("r17", "1.7B, plan, also trained on plan alone"),
+             ("p4", "4B, plan"), ("r4", "4B, plan, also trained on plan alone"))
 GIVEN = "#1D1D1F"
+BASE = USER   # plans written by the original model (planner.py)
+
+
+def base_plan(k):
+    """Summary of the held-out layer patterns carried out from the original model's plans: from the run's own evaluation,
+    or from baseplan_<arm>.json (planner.py run apart from the evaluation)."""
+    for f in (f"eval_{k}.json", f"baseplan_{k}.json"):
+        if (RES / f).exists():
+            bp = load(f)["sets"]["new_layer_patterns"].get("base_plan")
+            if bp:
+                return bp["summary"]
 
 
 def plans():
-    """Layer patterns never trained on: how often the written plan is exactly right, and how well the achieved change
-    follows the requested pattern with the model's own plan and with the exact plan given."""
+    """Layer patterns never trained on: how often a plan is exactly right, and how well the achieved change follows the
+    requested pattern with the plan the trained model writes, the plan the original model writes, and the exact plan."""
     arms = [(k, lab, load(f"eval_{k}.json")) for k, lab in PLAN_ARMS if (RES / f"eval_{k}.json").exists()]
-    width = 1240
+    width = 1500
     fig, ax = canvas(width, 2000)
     y = 1960
     write(ax, 20, y - 20, "Layer patterns never trained on", 30, True, ha="left")
     y -= 80
-    xp, x0, x1, lo, hi = 560, 680, 1200, -0.1, 0.8
+    xp, x0, x1, lo, hi = 700, 880, 1460, -0.1, 0.8
     sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
     write(ax, xp, y, "plan exactly right", 20, True)
     write(ax, (x0 + x1) / 2, y, "pattern match r", 20, True)
@@ -415,16 +426,23 @@ def plans():
     top = y + 20
     for k, lab, E in arms:
         S = E["sets"]["new_layer_patterns"]
+        bp = base_plan(k)
         write(ax, 20, y, lab, 22, ha="left")
         pe = S["summary"].get("plan_exact")
-        write(ax, xp, y, f"{100 * pe[0]:.0f}%" if pe else "–", 22, True)
+        if pe and bp:
+            write(ax, xp - 10, y, f"{100 * pe[0]:.0f}%", 22, True, ACC, ha="right")
+            write(ax, xp + 10, y, f"{100 * bp['plan_exact'][0]:.0f}%", 22, True, BASE, ha="left")
+        else:
+            write(ax, xp, y, f"{100 * pe[0]:.0f}%" if pe else "–", 22, True, ACC if pe else INK)
         own = S["summary"]["r"][0]
         seen = E["sets"]["seen"]["summary"]["r"][0]
         ax.plot([sx(seen)] * 2, [y - 16, y + 16], color=GRAY, lw=3, zorder=3)
+        pts = [own] + ([S["forced"]["summary"]["r"][0]] if "forced" in S else []) + ([bp["r"][0]] if bp else [])
+        ax.plot([sx(min(pts)), sx(max(pts))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
         if "forced" in S:
-            given = S["forced"]["summary"]["r"][0]
-            ax.plot([sx(own), sx(given)], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
-            ax.scatter([sx(given)], [y], s=260, color=GIVEN, zorder=5, linewidths=0)
+            ax.scatter([sx(S["forced"]["summary"]["r"][0])], [y], s=260, color=GIVEN, zorder=5, linewidths=0)
+        if bp:
+            ax.scatter([sx(bp["r"][0])], [y], s=260, color=BASE, zorder=5, linewidths=0)
         ax.scatter([sx(own)], [y], s=260, color=ACC, zorder=6, linewidths=0)
         y -= 64
     for v in (0, 0.4, 0.8):
@@ -432,14 +450,18 @@ def plans():
         write(ax, sx(v), y + 6, f"{v:.1f}", 18)
     y -= 50
     x = 20
-    for lab, col, kind in (("plan the model writes, or no plan", ACC, "dot"), ("exact plan given", GIVEN, "dot"),
+    for lab, col, kind in (("plan the trained model writes, or no plan", ACC, "dot"),
+                           ("plan the original model writes", BASE, "dot"), ("exact plan", GIVEN, "dot"),
                            ("patterns seen in training", GRAY, "tick")):
+        w = 22 + text_width(ax, lab, 20, True)
+        if x + w > width - 20:
+            x, y = 20, y - 44
         if kind == "dot":
             ax.scatter([x], [y], s=260, color=col, linewidths=0)
         else:
             ax.plot([x, x], [y - 16, y + 16], color=col, lw=3)
         write(ax, x + 22, y, lab, 20, True, col if col != GIVEN else INK, ha="left")
-        x += 22 + text_width(ax, lab, 20, True) + 60
+        x += w + 60
     crop(fig, ax, y - 40, 2000)
     save(fig, "plans")
 
