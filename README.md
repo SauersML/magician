@@ -46,7 +46,7 @@ For layer and token patterns that no training instruction used, the trained mode
 
 ![How plans enter training and testing](figures/planmethod.png)
 
-A second set of LoRAs, trained with plans, first writes a plan in its thinking block: how much it will change each concept, on which layers and on which reply tokens. It then answers while making the planned change. Training adds a next-token loss on the plan to the losses of one training step. Runs trained also on plans alone replaced half of their edit instructions by the bare question with the plan already in the thinking block, so that the plan was the only place the edit was written. At test time the thinking block holds the plan the trained model writes, a plan the original model writes after thinking, or the exact plan. Each run with plans started from a LoRA trained without plans.
+A second set of LoRAs, trained with plans, first writes a plan in its thinking block: how much it will change each concept, on which layers and on which reply tokens. It then answers while making the planned change. Training adds a next-token loss on the plan to the losses of one training step. Runs trained also on plans alone replaced half of their edit instructions by the bare question with the plan already in the thinking block, so that the plan was the only place the edit was written. The heatmaps are the change the trained Qwen3-1.7B makes on this training example, with the instruction and with the plan alone. At test time the thinking block holds the plan the trained model writes, a plan the original model writes after thinking, or the exact plan. Each run with plans started from a LoRA trained without plans.
 
 ![Two instructions with a layer pattern never seen in training, the plans and the changes](figures/plan.png)
 
@@ -80,7 +80,7 @@ These commands train `q4c`, the model of the result figures, with the code that 
 
 - `results/eval_<run>.json`: every instruction and score per test set. `q4c` is the Qwen3-4B of the result figures. `n17` (Qwen3-1.7B) is trained without plans, `p17` and `p4` (Qwen3-1.7B and Qwen3-4B) with plans, and `r17` and `r4` also on plans alone; `<run>think` is the same run following the original model's plans. `q4`, `q17`, `q17x` and `q17lr10` are earlier runs without plans.
 - `results/profiles_q4c.pt`: requested and achieved changes per reply token and layer behind the heatmaps.
-- `results/plan_examples_r17.pt`, `results/step_example_q4c.pt`: the data of the plan figure and the training-step figure.
+- `results/plan_examples_r17.pt`, `results/step_example_q4c.pt`, `results/step_example_r17.pt`: the data of the plan figure, the training-step figure and the plan training figure.
 - `results/train_logs/`: evaluations during training.
 
 | Code | What it does |
@@ -92,6 +92,6 @@ These commands train `q4c`, the model of the result figures, with the code that 
 | `magician/measure.py`, `magician/evaluate.py` | Scores on each model's own replies |
 | `magician/planner.py` | Plans written by the original model after thinking |
 | `magician/examples.py` | One instruction followed with each plan (plan figure) |
-| `magician/step_example.py` | One training step of a trained LoRA (training figure) |
+| `magician/step_example.py` | One training step of a trained LoRA, with or without a plan (training figures) |
 | `magician/run_pod.sh` | Prep, training and evaluation of several runs on one GPU |
 | `figures/make_figures.py` | Every figure, from `results/` |
