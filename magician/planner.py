@@ -18,15 +18,23 @@ def instruction(ex):
     return ex['user'].replace(C.TASKS[ex['task']], '').strip()
 
 
-def prefix_text(L, n_shots=16, seed=7):
+def prefix_text(L, seed=7):
+    """The header (the instruction language's size words and the rule for concepts left alone) and one example per
+    training layer pattern, plus two with a concept the instruction leaves alone. Held-out patterns appear nowhere."""
     rng = random.Random(seed)
     tr_t, _ = C.splits()
-    shots = [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', spec.LAYER_MIX, spec.TOKEN_TRAIN,
-                          n_edits=1, control_p=0.0, decoy_p=0.0, tasks=C.TASKS) for _ in range(n_shots)]
+    fams = list(dict.fromkeys(spec.LAYER_MIX))
+    shots = [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', [f], spec.TOKEN_TRAIN, n_edits=1,
+                          control_p=0.0, decoy_p=0.0, tasks=C.TASKS) for f in fams]
+    shots += [spec.example(rng, rng.choice(tr_t), L, K.TRAIN_CONCEPTS, 'train', spec.LAYER_MIX, spec.TOKEN_TRAIN,
+                           n_edits=1, control_p=0.0, decoy_p=1.0, tasks=C.TASKS) for _ in range(2)]
+    rng.shuffle(shots)
+    words = lambda a: ', '.join(w for w in spec.SIZE_WORDS[a][0] + spec.SIZE_WORDS[a][1][:1] if w)
     head = (f'Each instruction asks a language model to change its internal representation of a concept. The model has '
             f'{L} layers, numbered 0 to {L - 1}, and the reply has {spec.T_REPLY} tokens, numbered 0 to '
             f'{spec.T_REPLY - 1}. The plan states the change in SD on every layer it touches and the reply tokens it '
-            'applies to.\n\n')
+            f'applies to: + to raise, - to lower. With no number given, {words(1.0)} mean 1 SD, {words(3.0)} mean 3 SD, '
+            'and no size word means 2 SD. A concept the instruction says to leave unchanged gets no line.\n\n')
     return head + ''.join(f'Instruction: {instruction(ex)}\nPlan:\n{spec.plan_text(ex["edits"])}\n\n' for ex in shots)
 
 
