@@ -668,11 +668,12 @@ def training():
         G[:min(len(A), T_SHOWN)] = A[:T_SHOWN]
         heat(ax, x, top - mh, mw, mh, G, radius=6)
 
-    def term(top, h, op, name, note):
+    def term(top, h, op, name, note=""):
         if op:
             write(ax, cx + lp, top - h / 2, op, 28, True, ha="left")
         write(ax, cx + lp + 40, top - h / 2, name, 28, True, ha="left")
-        write(ax, cx + lp + 40, top - h / 2 - 34, note, 22, color=MUTED, ha="left", va="top")
+        if note:
+            write(ax, cx + lp + 40, top - h / 2 - 34, note, 22, color=MUTED, ha="left", va="top")
 
     def concepts(top, cols):
         """Each concept's Δz above its target; returns the bottom edge."""
@@ -702,7 +703,7 @@ def training():
     nt = S["next_token"]
     bh, gw = 120, aw / 3
     write(ax, x0, yy + 30, "next-token probability", 22, color=MUTED, ha="left")
-    term(yy, bh, "+", "KL", "weight 3")
+    term(yy, bh, "+", "KL")
     pmax = max(nt["p_orig"][:3] + nt["p_trained"][:3])
     for k, (tk, po, pt) in enumerate(zip(nt["tokens"][:3], nt["p_orig"], nt["p_trained"])):
         gx = x0 + k * gw + gw / 2
