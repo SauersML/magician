@@ -26,6 +26,7 @@ ap.add_argument('--gen_n', type=int, default=24, help='questions per set for the
 ap.add_argument('--sets', default=','.join(spec.EVAL_SETS), help='comma-separated eval sets')
 ap.add_argument('--base_plan_sets', default='new_layer_patterns,all_new',
                 help='with plans: sets also scored with plans the original model writes (planner.py)')
+ap.add_argument('--plan_think', type=int, default=0, help='tokens the original model may think before each plan (0: none)')
 args = ap.parse_args()
 
 prep = torch.load(os.path.join(C.OUT, 'prep.pt'), weights_only=False)
@@ -57,8 +58,8 @@ for name in args.sets.split(','):
         out['sets'][name]['alone'] = {'summary': {k: measure.summary(fa, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
                                       'items': fa}
     if C.PLAN and name in args.base_plan_sets.split(','):   # the original model writes the plan, the adapter carries it out
-        planner = planner or Planner(model, tok, L)
-        plans = [planner(ex) for ex in exs]
+        planner = planner or Planner(model, tok, L, think=args.plan_think > 0, think_tokens=args.plan_think)
+        plans = planner.plans(exs)
         fb = measure.score(lm, model, tok, res, prep, [dict(ex, plan=p) for p, ex in zip(plans, exs)], replies, forced=True)
         ps = [measure.plan_scores(p, ex, L) for p, ex in zip(plans, exs)]
         for it, p in zip(fb, ps):
