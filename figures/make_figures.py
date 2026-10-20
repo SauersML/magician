@@ -696,7 +696,7 @@ def training():
     write(ax, x0 + 3 * mw + 2 * mg + 24, yy - mh - 4, "…", 34, True, MUTED)
     yy = yb2 - 30
     ph = plan_height(S["plan"], 18, aw - 40) + 36
-    term(yy, ph, "+", "cross-entropy", "plan tokens,\nleft form")
+    term(yy, ph, "+", "cross-entropy", "plan tokens,\nafter the\ninstruction")
     rbox(ax, x0, yy - ph, aw, ph, LAVENDER, radius=16, z=3, edge=PURPLE, lw=2.5, ls=(0, (5, 4)))
     plan_text(ax, x0 + 20, yy - 18, S["plan"], 18, aw - 40, set())
     yy -= ph + 110
