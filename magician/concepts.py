@@ -5,6 +5,7 @@ of every sentence in SENTENCES. A concept's direction at layer l is the mean res
 phrase to the end of the sentence) across all sentences, minus the same mean averaged over the training concepts.
 Every fourth concept of each category (by list position, starting with the second) is held out of training.
 """
+import os
 
 CONCEPTS = [
     # animals
@@ -66,15 +67,11 @@ CONCEPTS = [
     ('white', 'the color white', 'color'), ('pink', 'the color pink', 'color'),
 ]
 
-NAMES = [c[0] for c in CONCEPTS]
-PHRASES = [c[1] for c in CONCEPTS]
-CATEGORY = [c[2] for c in CONCEPTS]
-
 
 def _held_out():
     seen = {}
     out = []
-    for i, cat in enumerate(CATEGORY):
+    for i, (_, _, cat) in enumerate(CONCEPTS):
         j = seen.get(cat, 0)
         seen[cat] = j + 1
         if j % 4 == 1:
@@ -83,7 +80,6 @@ def _held_out():
 
 
 TEST_CONCEPTS = _held_out()
-TRAIN_CONCEPTS = [i for i in range(len(CONCEPTS)) if i not in set(TEST_CONCEPTS)]
 
 # Sentences with one slot {X} that read naturally for any concept phrase.
 SENTENCES = [
@@ -136,3 +132,61 @@ SENTENCES = [
     "The final exam covered {X}.",
     "I drew a sketch of {X} in class.",
 ]
+
+# More training-only concepts (the second training run): (name, phrase). None of them is a held-out concept or a
+# close synonym of one.
+_EXTRA_PLURAL = """giraffe zebra kangaroo koala panda gorilla camel hippo rhino crocodile turtle octopus jellyfish crab lobster
+ant mosquito bat squirrel hedgehog raccoon otter beaver seal parrot pigeon crow swan duck goose flamingo peacock hawk goat
+donkey llama buffalo moose salmon goldfish snail worm scorpion dragon unicorn dinosaur carrot onion mushroom cucumber grape
+cherry peach pear watermelon pineapple mango coconut lemon avocado peanut almond pancake waffle taco sausage sandwich donut
+pie bed sofa door window ladder hammer needle rope bucket basket wallet ring necklace watch backpack suitcase pillow blanket
+towel toothbrush comb spoon fork plate cup kettle oven fridge television radio microphone keyboard printer battery flashlight
+compass map telescope microscope balloon kite drum violin trumpet flute harp helmet tent anchor crown coin flag bell statue
+ticket envelope stamp truck bus motorcycle helicopter rocket submarine tractor ambulance taxi ship canoe skateboard sled
+swamp cave lake waterfall valley canyon farm village castle church hospital airport library prison museum zoo garden kitchen
+bathroom office factory market stadium bridge tower pyramid tornado hurricane flood drought wave rock crystal diamond leaf
+rose tulip sunflower cactus seed sunset magnet lawyer engineer firefighter pilot sailor spy detective priest monk ninja
+knight cowboy viking clown magician athlete singer actor writer poet painter dancer student grandparent twin neighbor
+stranger ghost zombie vampire witch alien giant fairy angel demon president emperor princess thief prisoner refugee tourist
+fisherman miner plumber carpenter dentist surgeon veterinarian judge birthday wedding funeral holiday election protest
+revolution puzzle""".split()
+_PLURAL_FIX = {'toothbrush': 'toothbrushes', 'battery': 'batteries', 'spy': 'spies', 'wolf': 'wolves', 'leaf': 'leaves', 'knife': 'knives', 'thief': 'thieves', 'fisherman': 'fishermen',
+               'cactus': 'cacti', 'octopus': 'octopuses', 'jellyfish': 'jellyfish', 'moose': 'moose', 'salmon': 'salmon',
+               'goldfish': 'goldfish', 'buffalo': 'buffaloes', 'sheep': 'sheep', 'mosquito': 'mosquitoes',
+               'tornado': 'tornadoes', 'potato': 'potatoes', 'church': 'churches', 'watch': 'watches', 'bus': 'buses',
+               'peach': 'peaches', 'sandwich': 'sandwiches', 'witch': 'witches', 'princess': 'princesses',
+               'compass': 'compasses', 'goose': 'geese', 'library': 'libraries', 'factory': 'factories',
+               'cherry': 'cherries', 'fairy': 'fairies', 'grandparent': 'grandparents', 'canoe': 'canoes',
+               'taco': 'tacos', 'rhino': 'rhinos', 'hippo': 'hippos', 'flamingo': 'flamingos', 'mango': 'mangoes',
+               'volcano': 'volcanoes', 'kangaroo': 'kangaroos', 'zoo': 'zoos', 'radio': 'radios', 'piano': 'pianos'}
+_EXTRA_MASS = """Germany Spain Greece Turkey Australia Argentina Peru Kenya Nigeria Norway Sweden Poland Ireland Scotland Korea
+Vietnam Thailand Iran Israel Cuba Berlin Madrid Moscow Cairo Sydney Chicago Venice Hawaii Alaska Antarctica Mars Jupiter
+lightning fog hail sand iron copper oil smoke ash dust mud grass moss autumn winter spring summer oxygen electricity gravity
+happiness grief anxiety disgust gratitude nostalgia confusion panic relief trust courage kindness cruelty greed laziness
+patience regret admiration embarrassment despair wonder sleepiness hunger thirst pain fatigue sarcasm humor honesty
+deception ambition freedom peace justice chaos beauty economics physics chemistry biology astronomy geography architecture
+literature theater cinema photography fashion cooking gardening fishing hunting camping travel education democracy
+capitalism socialism taxes banking pollution recycling vaccines surgery nutrition fitness yoga meditation sleep memory
+mythology magic Christmas Halloween slavery basketball tennis golf baseball swimming boxing skiing surfing poker opera jazz
+ballet sculpture knitting origami garlic corn lettuce butter yogurt popcorn noodles curry steak bacon soda juice vinegar
+salt sugar cinnamon vanilla candy soap""".split()
+_EXTRA_PHRASED = [('Los Angeles', 'Los Angeles'), ('the Arctic', 'the Arctic'), ('the jungle', 'the jungle'),
+                  ('the countryside', 'the countryside'), ('space', 'outer space'), ('the galaxy', 'the galaxy'),
+                  ('the sky', 'the sky'), ('night', 'the night'), ('morning', 'the morning'), ('tides', 'the tides'),
+                  ('the internet', 'the internet'), ('social media', 'social media'), ('video games', 'video games'),
+                  ('climate change', 'climate change'), ('dreams', 'dreams'), ('the Bible', 'the Bible'),
+                  ('the Roman Empire', 'the Roman Empire'), ('World War II', 'World War II'),
+                  ('the Olympics', 'the Olympics'), ('rock music', 'rock music'), ('hip hop', 'hip hop'),
+                  ('painting', 'painting'), ('ice cream', 'ice cream'), ('light bulbs', 'light bulbs'),
+                  ('headphones', 'headphones'), ('scissors', 'scissors'), ('glasses', 'glasses'),
+                  ('orange', 'the color orange'), ('brown', 'the color brown'), ('gray', 'the color gray'),
+                  ('silver', 'the color silver'), ('turquoise', 'the color turquoise'), ('beige', 'the color beige')]
+EXTRA = ([(w, _PLURAL_FIX.get(w, w + 's'), 'extra') for w in _EXTRA_PLURAL]
+         + [(w, w, 'extra') for w in _EXTRA_MASS] + [(n, p, 'extra') for n, p in _EXTRA_PHRASED])
+
+if os.environ.get('MAGIC_EXTRA') == '1':  # every extra concept is a training concept
+    CONCEPTS = CONCEPTS + EXTRA
+NAMES = [c[0] for c in CONCEPTS]
+PHRASES = [c[1] for c in CONCEPTS]
+CATEGORY = [c[2] for c in CONCEPTS]
+TRAIN_CONCEPTS = [i for i in range(len(CONCEPTS)) if i not in set(TEST_CONCEPTS)]
