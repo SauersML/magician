@@ -10,7 +10,7 @@ Qwen3-4B (`q4c`, 5000 steps), 96 held-out questions per set:
 
 ![Share of the requested change on each held-out set](figures/scores.png)
 
-- Instructions like those in training, new wordings and verbs, concepts never trained on, and three edits in one instruction: the trained model makes 52-61% of the requested change, with the requested pattern (r 0.49-0.62). The original model makes none of it.
+- Instructions like those in training, new wordings and verbs, concepts never trained on, and three edits in one instruction: the trained model makes 52-61% of the requested change, with the requested pattern (r 0.49-0.62). The original model makes -3% to 3% of it.
 - Layer patterns never trained on (prime-numbered layers, perfect squares, powers of two, every 4th or 5th layer, "every layer except", a V shape, a wave): 22% of the change, with the wrong pattern (r -0.13). Token patterns never trained on (alternating tokens, fading, a window of tokens): 46% of the change, with little of the pattern (r 0.14).
 - With no request, the trained model changes the concepts by 0.16 SD (root mean square).
 
