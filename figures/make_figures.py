@@ -212,7 +212,7 @@ def rich(ax, x, top, text, size, width, bold=(), hidden=(), max_lines=None, colo
 
 ACC = "#E8772E"   # the trained model's achieved change
 TGT = "#D1D1D6"   # the requested change
-ARM = "q17"
+ARM = "q4c"
 SET_LABELS = {
     "seen": "Kinds of instruction seen in training",
     "new_wording": "New wordings and verbs",
@@ -335,17 +335,17 @@ def over_layers(prof):
 
 
 def magic():
-    """Typical results on instructions with a concept, layer pattern and wording never seen in training."""
+    """Typical results on instructions about concepts never seen in training."""
     E, P = data()
-    items, profs = E["sets"]["all_new"]["items"], P["all_new"]
+    items, profs = E["sets"]["new_concepts"]["items"], P["new_concepts"]
     picks, used = [], set()
-    for fam in ("prime", "every45", "wave", "vshape", "except", "square"):
+    for fam in ("bump", "ramp_up", "range", "half", "last", "first"):
         i = typical(items, profs, lambda it: fam in it["fams"] and "tok_all" in it["fams"] and len(it["concepts"]) == 1
                     and id(it) not in used)
         if i is not None:
             used.add(id(items[i]))
             picks.append((items[i], profs[i]))
-    cards("magic", picks, "Concepts, layer patterns and wordings never seen in training", over_tokens,
+    cards("magic", picks, "Concepts never seen in training", over_tokens,
           len(over_tokens(picks[0][1])[0]), "layer")
 
 
@@ -370,8 +370,9 @@ def scores():
     y = 1960
     write(ax, 20, y - 20, "Share of the requested change", 30, True, ha="left")
     y -= 90
-    x0, x1 = 640, 1150
+    x0, x1 = 600, 960
     sx = lambda v: x0 + (x1 - x0) * np.clip(v, 0, 1)
+    write(ax, 1220, y + 20, "pattern match r", 20, True, ha="right")
     for key, label in SET_LABELS.items():
         S = E["sets"][key]["summary"]
         rich(ax, 20, y - 6, label, 22, x0 - 60)
@@ -382,7 +383,10 @@ def scores():
             if m > 0.005:
                 rbox(ax, x0, cy - 15, sx(m) - x0, 30, col, radius=8, z=2)
             ax.plot([sx(lo), sx(hi)], [cy, cy], color=INK, lw=2, zorder=4)
-            write(ax, max(sx(hi), sx(m)) + 14, cy, f"{100 * m:.0f}%", 20, True, ha="left")
+            write(ax, max(sx(hi), sx(m)) + 14, cy, f"{max(100 * m, 0):.0f}%" if m > -0.005 else f"{100 * m:.0f}%",
+                  20, True, ha="left")
+        r = S["r"][0]
+        write(ax, 1220, y - 22, f"{r:+.2f}", 22, True, RED if r < 0.2 else INK, ha="right")
         y -= 120
     legend_target(ax, width / 2 + 60, y - 10, entries=(("trained model", ACC), ("original model", GRAY)))
     crop(fig, ax, y - 50, 2000)
