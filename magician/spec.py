@@ -16,6 +16,7 @@ but', a V shape or a smooth wave, so every LAYER_TEST family stays new. The held
 the basic families, so they are the same items for every training mix.
 """
 import math
+import os
 
 import numpy as np
 
@@ -357,14 +358,18 @@ def edit(rng, ci, L, wording, layer_fams, token_fams, two_clause_p=0.3, token_p=
 
 
 ORDN = {2: '2nd', 3: '3rd'}
+TABLE = os.environ.get('MAGIC_PLAN') == '2'  # plans as a table: every layer's value in layer order, zeros included
 
 
 def layer_text(F):
-    """Signed SD per layer as text: grouped by value when there are at most 4 values, else layer by layer."""
+    """Signed SD per layer as text: grouped by value when there are at most 4 values, else layer by layer. With TABLE,
+    always every layer in order, so each layer's value sits at the same place in the plan whatever the pattern."""
     v = np.round(np.asarray(F, np.float64), 1) + 0.0
     vals = sorted({float(x) for x in v if x != 0}, key=lambda x: -x)
     if not vals:
         return 'no change on any layer'
+    if TABLE:
+        return 'layer by layer ' + ', '.join(f'{l} {x:+.1f}' if x else f'{l} 0' for l, x in enumerate(v))
     if len(vals) <= 4:
         return '; '.join(f'{x:+.1f} SD on layers {join(np.nonzero(v == x)[0].tolist(), "and").replace(" and ", ", ")}'
                          for x in vals)
@@ -390,7 +395,7 @@ def token_text(g):
 
 
 def plan_text(edits):
-    """The explicit plan for an instruction (MAGIC_PLAN=1): one line per requested concept with its change in SD on
+    """The explicit plan for an instruction (MAGIC_PLAN=1, or 2 for tables): one line per requested concept with its change in SD on
     every layer it touches and the reply tokens it applies to. The model writes it in its thinking block, then
     answers. Every edit's profile is a layer profile times a token profile, so the plan is exact up to rounding."""
     if not edits:

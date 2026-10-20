@@ -20,7 +20,7 @@ DEVICE = os.environ.get('MAGIC_DEVICE', 'cuda' if torch.cuda.is_available() else
 SMOKE = os.environ.get('MAGIC_SMOKE') == '1'  # a few questions and sentences, to test the code end to end
 TASKS = json.load(open(os.path.join(ROOT, 'tasks.json')))[:40 if SMOKE else None]
 REPLY_TOKENS = 64
-PLAN = os.environ.get('MAGIC_PLAN') == '1'          # write an explicit plan in the thinking block, then answer
+PLAN = os.environ.get('MAGIC_PLAN', '0') in ('1', '2')  # write an explicit plan in the thinking block, then answer (2: as a table)
 MAX_PLAN = int(os.environ.get('MAGIC_MAX_PLAN', '768'))
 THINK_END = 151668                                  # </think>
 os.makedirs(OUT, exist_ok=True)
