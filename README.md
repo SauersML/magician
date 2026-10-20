@@ -14,7 +14,7 @@ Asked to raise its representation of clouds in its first half of layers, the tra
 
 ![One training step](figures/training.png)
 
-The loss is computed on internal representations, not on output text: at every layer and reply token, it compares the change the LoRA makes with the requested change. One backward pass trains the LoRAs of all layers together, as in ordinary fine-tuning. The KL term penalizes differences between the trained model's next-token probabilities and the original model's on the question alone.
+The loss is computed on internal representations, not on output text: at every layer and reply token, it compares the change the LoRA makes with the requested change. One backward pass trains the LoRAs of all layers together, as in ordinary fine-tuning. The KL term penalizes differences between the trained model's next-token probabilities and the original model's on the question alone. Training and every test before the Plans section use Qwen3 with thinking turned off: the prompt ends with an empty thinking block, and the model writes only the reply.
 
 ## What training saw
 
