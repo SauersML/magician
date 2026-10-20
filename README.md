@@ -44,7 +44,9 @@ For layer and token patterns that no training instruction used, the trained mode
 
 ## Plans
 
-With plans, the model first writes in its thinking block how much it will change each concept, on which layers and tokens, and then answers. Training adds a next-token loss on the plan. Runs trained also on plans alone saw half of their edit instructions replaced by the bare question followed by the plan, so that the plan was the only place the edit was written.
+![How plans enter training and testing](figures/planmethod.png)
+
+A second set of LoRAs, trained with plans, first writes a plan in its thinking block: how much it will change each concept, on which layers and on which reply tokens. It then answers while making the planned change. Training adds a next-token loss on the plan to the losses of one training step. Runs trained also on plans alone replaced half of their edit instructions by the bare question with the plan already in the thinking block, so that the plan was the only place the edit was written. At test time the thinking block holds the plan the trained model writes, a plan the original model writes after thinking, or the exact plan. Each run with plans started from a LoRA trained without plans.
 
 ![Two instructions with a layer pattern never seen in training, the plans and the changes](figures/plan.png)
 
