@@ -1,6 +1,6 @@
 """Plans written by the original model (the adapter off), from a few training examples, for the trained model to carry
-out. The plan text follows spec.plan_text. Decoding is greedy with two rules: each line opens with a real concept's
-name, and every layer list keeps to existing layers in increasing order (when the model starts a layer past the last
+out. The plan text follows spec.plan_text. Decoding is greedy with two rules: each line opens with the name of a
+concept the instruction mentions, and every layer list keeps to existing layers in increasing order (when the model starts a layer past the last
 one, or one at or below the layer before it, the ', ' is taken back, the list ends with ';' and decoding goes on)."""
 import contextlib
 import copy
@@ -71,25 +71,29 @@ class Planner:
             with torch.no_grad(), self.off():
                 self.cache = model(self.pids, use_cache=True).past_key_values
 
-    def _name_token(self, logits, line):
-        """The most likely next token that keeps the line's opening on a real concept's name followed by ': '."""
+    def _name_token(self, logits, line, names):
+        """The most likely next token that keeps the line's opening on one of `names` followed by ': '."""
         tok, w0 = self.tok, line.lstrip()
         cands = {tok(r, add_special_tokens=False).input_ids[0] for r in
-                 ((nm + ': ')[len(w0):] for nm in K.NAMES if (nm + ': ').startswith(w0)) if r}
+                 ((nm + ': ')[len(w0):] for nm in names if (nm + ': ').startswith(w0)) if r}
         for t in torch.topk(logits, 200).indices.tolist():
             w = (line + tok.decode([t])).lstrip()
-            if any((nm + ': ').startswith(w) or w.startswith(nm + ': ') for nm in K.NAMES):
+            if any((nm + ': ').startswith(w) or w.startswith(nm + ': ') for nm in names):
                 cands.add(t)
                 break
         return max(cands, key=lambda t: float(logits[t])) if cands else int(logits.argmax())
 
-    def _decode(self, cache, base, logits, max_new=None):
-        """Greedy plan text from the next-token logits after `base` cached tokens, under the name and layer rules."""
+    def _decode(self, cache, base, logits, ex, max_new=None):
+        """Greedy plan text from the next-token logits after `base` cached tokens, under the name and layer rules; each
+        line is about a concept the instruction mentions by name or phrase."""
         tok, model = self.tok, self.model
+        low = instruction(ex).lower()
+        said = lambda x: re.search(r'\b' + re.escape(x.lower()) + r'\b', low)
+        names = [nm for nm, ph in zip(K.NAMES, K.PHRASES) if said(nm) or said(ph)] or list(K.NAMES)
         gen = []
         for _ in range(max_new or 60 + 7 * self.L):
             line = tok.decode(gen).rpartition('\n')[2]
-            nxt = self._name_token(logits, line) if ': ' not in line else int(logits.argmax())
+            nxt = self._name_token(logits, line, names) if ': ' not in line else int(logits.argmax())
             text = tok.decode(gen + [nxt])
             cut = bad_at(text, self.L)
             feed = [nxt]
@@ -111,7 +115,7 @@ class Planner:
         q = self.tok(f'Instruction: {instruction(ex)}\nPlan:\n', add_special_tokens=False, return_tensors='pt').input_ids
         with torch.no_grad(), self.off():
             logits = self.model(q.to(C.DEVICE), past_key_values=cache, use_cache=True).logits[0, -1]
-            return self._decode(cache, self.pids.shape[1] + q.shape[1], logits)
+            return self._decode(cache, self.pids.shape[1] + q.shape[1], logits, ex)
 
     def plans(self, exs, bs=16):
         if not self.think:
@@ -129,12 +133,12 @@ class Planner:
                 ids = torch.tensor([[tok.pad_token_id] * (T - len(p)) + p for p in P], device=C.DEVICE)
                 att = torch.tensor([[0] * (T - len(p)) + [1] * len(p) for p in P], device=C.DEVICE)
                 g = model.generate(input_ids=ids, attention_mask=att, do_sample=False, max_new_tokens=self.think_tokens)
-                for p, row in zip(P, g[:, T:].tolist()):
+                for ex, p, row in zip(exs[b:b + bs], P, g[:, T:].tolist()):
                     # the thinking up to </think> (closed by hand if the budget ran out), then the plan under the rules
                     th = row[:row.index(C.THINK_END) + 1] if C.THINK_END in row else \
                         [t for t in row if t != tok.pad_token_id] + tok('\n</think>', add_special_tokens=False).input_ids
                     full = p + th + tok('\n\n', add_special_tokens=False).input_ids
                     o = model(torch.tensor([full], device=C.DEVICE), use_cache=True)
-                    out.append(self._decode(o.past_key_values, len(full), o.logits[0, -1]))
+                    out.append(self._decode(o.past_key_values, len(full), o.logits[0, -1], ex))
         tok.padding_side = 'right'
         return out
