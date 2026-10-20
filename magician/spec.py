@@ -259,14 +259,18 @@ def layer_pattern(rng, fam, L):
     elif fam == 'vshape':
         m = rng.randint(6, L - 7)
         f[:] = np.abs(ls - m) / max(m, L - 1 - m)
-        p = rng.choice([f'in a V shape, most at the outermost layers and not at all at layer {m}',
-                        f'more the farther a layer is from layer {m}, and not at all at layer {m}'])
+        far = 0 if m >= L - 1 - m else L - 1
+        p = rng.choice([f'in a V shape: none at layer {m}, growing in proportion to the distance from layer {m}, '
+                        f'and the full amount at layer {far}',
+                        f'more the farther a layer is from layer {m}, in proportion to the distance: none at layer {m} '
+                        f'and the full amount at layer {far}'])
     elif fam == 'wave':
         P = rng.choice([4, 6, 8, 10])
         f[:] = np.cos(2 * math.pi * ls / P)
         p = rng.choice([f'in a wave across your layers that peaks at layer 0 and every {P} layers after, '
-                        f'dipping below normal in between',
-                        f'up and down in a smooth wave with a period of {P} layers, starting at a peak at layer 0'])
+                        f'dipping to the same amount below normal halfway between peaks',
+                        f'in a smooth wave with a period of {P} layers that peaks at layer 0 and goes just as far below '
+                        f'normal halfway between peaks'])
     else:
         raise ValueError(fam)
     return f, p

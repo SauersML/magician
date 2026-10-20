@@ -36,7 +36,7 @@ With `MAGIC_PLAN=1`, the model first writes a plan in its thinking block and the
 
 ![Layer patterns never trained on, by rule](figures/rules.png)
 
-- By rule: the original model writes exact plans for powers of two (82%), prime layers (60%) and perfect squares (60%), where the trained model's plans are almost never exact. Plans for "every layer except", V shapes and waves stay wrong from both.
+- By rule: the original model writes exact plans for powers of two (82%), prime layers (60%) and perfect squares (60%), where the trained model's plans are almost never exact. Plans for "every layer except", V shapes and waves stay wrong from both. The V-shape and wave instructions in these results left the size on each layer open: "2 SD more the farther a layer is from layer 26" also reads as 2 SD per layer of distance, which is how the original 4B model planned it (up to +18 SD), and the wave instructions did not say how far below normal the wave goes. `magician/spec.py` now words both so that each instruction has one target: the V reaches the full amount at the farthest layer, in proportion to the distance, and the wave goes as far below normal as above.
 - Plans written as a table (every layer's value in order, zeros included; `MAGIC_PLAN=2`) were learned more slowly than lists: after 1000 steps the plan was exact for 33% of trained patterns against 50% for lists, and for none of the new patterns in either (`results/train_logs/t17.json`).
 
 ## Code
