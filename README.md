@@ -18,9 +18,25 @@ Qwen3-4B (`q4c`, 5000 steps), 96 held-out questions per set:
 
 ![Typical results on reply-token patterns never seen in training](figures/tokens.png)
 
-`results/eval_<arm>.json` holds every score and item for each run (`q17`, `q17x`: Qwen3-1.7B with 135 or 569 training concepts; `q17lr10`: Qwen3-1.7B at a 5x learning rate; `q4`, `q4c`: Qwen3-4B after 2500 and 5000 steps); `results/train_logs/` holds the evaluations during training.
+`results/eval_<arm>.json` holds every score and item for each run (`p17`, `n17`, `p4`, `r17`, `r4`: see Plans; `<arm>think`: the original model's plans after thinking; `q17`, `q17x`: Qwen3-1.7B with 135 or 569 training concepts; `q17lr10`: Qwen3-1.7B at a 5x learning rate; `q4`, `q4c`: Qwen3-4B after 2500 and 5000 steps); `results/train_logs/` holds the evaluations during training.
 
 A second training mix (`spec.LAYER_MIX`: number properties of the layer, complements, unions, long lists, partial ramps, valleys, alternating blocks and two strengths, with every held-out layer pattern still absent) and a loss that weighs the zero and nonzero parts of a sparse target equally reached step 500 of 1500 on Qwen3-1.7B (`results/train_logs/q17v2_step500.json`, 24 items per set): on layer patterns never trained on, the share of the change rose from 16% to 33% and the pattern match from r -0.12 to -0.01.
+
+## Plans
+
+With `MAGIC_PLAN=1`, the model first writes a plan in its thinking block and then answers. A plan has one line per requested concept: the change in SD on each layer it touches and the reply tokens it applies to, for example `snow: +2.0 SD on layers 14, 15, 16; every reply token`. Training adds a next-token loss on the plan. A plan counts as exact when it is within 0.06 SD of the target on every layer and reply token. `p17` (Qwen3-1.7B, 2500 steps from `q17lr10`) and `p4` (Qwen3-4B, 2000 steps from `q4c`) train with plans; `n17` is `p17` without plans. `r17` and `r4` continue `p17` and `p4` (1500 and 2000 steps) with half of the edit examples given as the bare question followed by the plan, with no plan loss on those (`--plan_only_p 0.5`), so that the plan is the only place the edit is written. All numbers are on 96 held-out questions per set.
+
+![Layer patterns never trained on](figures/plans.png)
+
+- On layer patterns never trained on, `p17` writes an exact plan for 5% of instructions, and the change it makes follows the requested pattern at r 0.15 (`n17`: 0.02). With the exact plan placed in its thinking block, r is 0.45; on instructions where the concept, the wording and the layer pattern are all new, 0.39 against 0.09 with its own plan. The model carries out a correct plan for a pattern it never saw, and writing that plan is where it fails.
+- Training on the plan alone makes the model follow plans more closely. With the exact plan after the bare question, r on new layer patterns is 0.60 for `r17` and 0.34 for `p17`; with the exact plan after the instruction, 0.56 and 0.45.
+- `p4` writes an exact plan for 11% of these instructions, reaches r 0.21, and 0.32 with the exact plan.
+- The original model (adapter off) writes better plans for new patterns than the trained model. `magician/planner.py` gives it one example of each training layer pattern and the meaning of the size words, lets it think for up to 1024 tokens, and keeps each plan line to a concept the instruction mentions and to existing layers in increasing order. Its plans are exact for 42% of the instructions with new layer patterns, and `r17` carries them out at r 0.38 (0.17 with its own plans). On instructions where everything is new, r is 0.29 (0.14 with its own plans).
+
+![Layer patterns never trained on, by rule](figures/rules.png)
+
+- By rule: the original model writes exact plans for powers of two (82%), prime layers (60%) and perfect squares (60%), where the trained model's plans are almost never exact. Plans for "every layer except", V shapes and waves stay wrong from both.
+- Plans written as a table (every layer's value in order, zeros included; `MAGIC_PLAN=2`) were learned more slowly than lists: after 1000 steps the plan was exact for 33% of trained patterns against 50% for lists, and for none of the new patterns in either (`results/train_logs/t17.json`).
 
 ## Code
 
@@ -31,5 +47,6 @@ A second training mix (`spec.LAYER_MIX`: number properties of the layer, complem
 | `magician/prep.py` | Concept directions, standardization and the original model's replies. |
 | `magician/train.py` | LoRA training. |
 | `magician/measure.py`, `magician/evaluate.py` | Scoring on the trained model's own replies. |
+| `magician/planner.py` | Plans written by the original model, for the trained model to carry out. |
 | `magician/run_pod.sh` | Prep, training and evaluation of several runs on one GPU, each with its plan mode and starting adapter. |
 | `figures/make_figures.py` | Every figure, from `results/`. |
