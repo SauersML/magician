@@ -2,6 +2,7 @@
 plan_examples_<arm>.pt from magician/examples.py. Usage: python make_figures.py [figure ...] (default: every figure)."""
 
 import json
+import random
 import re
 import sys
 from pathlib import Path
@@ -13,30 +14,36 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import font_manager
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "results"
 OUT = ROOT / "figures"
+ASSETS = OUT / "assets"
 sys.path.insert(0, str(ROOT / "magician"))
 import concepts as K  # noqa: E402
 import spec  # noqa: E402
 
 INK = "#1D1D1F"
+MUTED = "#6E6E73"
 PANEL = "#F4F4F6"
+LAVENDER = "#F2ECFE"     # the trained model's panels
+PURPLE = "#7B3FE4"       # the trained model
+PURPLE_LIGHT = "#E3D6FB"
+ORIG = "#A1A1A6"         # the original model
+ORANGE = "#E8772E"       # plans the original model writes (planner.py)
+NEW = "#FFE27A"          # highlight: never seen in training
+NEW_PANEL = "#FFF7D6"
+BLUE = "#3478F6"         # the user's message
+REPLY = "#E9E9EB"        # the model's message
+TGT = "#D1D1D6"          # the requested change, as bars
+PALE_RED = "#F6BDB4"     # a plan layer that differs from the request
 RED = "#D2432F"
-GRAY = "#A1A1A6"
-PALE_GRAY = "#D1D1D6"
-GRID = "#E5E5EA"
-ACC = "#E8772E"       # the trained model and the change it makes
-TGT = "#D1D1D6"       # the requested change
-PLANNER = "#6250D6"   # plans the original model writes (planner.py)
-GIVEN = INK           # the exact plan
-PALE_RED = "#F6BDB4"  # a plan layer that differs from the request
 MONO = "Menlo"
-ARM = "q4c"           # the Qwen3-4B adapter of the result figures
+ARM = "q4c"              # the Qwen3-4B adapter of the result figures
+W = 1200                 # figure width in canvas units (0.01 inch; 2400 pixels at 200 dpi)
 
-PT = 100 / 72  # canvas units per typographic point (one unit is 0.01 inch)
+PT = 100 / 72  # canvas units per typographic point
 TASKS = None   # the questions (magician/tasks.json), set in main
 
 
@@ -58,9 +65,8 @@ def save(fig, name):
 
 # Canvas primitives (units of 0.01 inch).
 
-
-def canvas(width, height):
-    fig = plt.figure(figsize=(width / 100, height / 100), facecolor="white")
+def canvas(height, width=W):
+    fig = plt.figure(figsize=(width / 100, height / 100), dpi=200, facecolor="white")
     ax = fig.add_axes([0, 0, 1, 1], xlim=(0, width), ylim=(0, height))
     ax.set_aspect("equal")
     ax.axis("off")
@@ -73,97 +79,176 @@ def crop(fig, ax, bottom, top):
     fig.set_size_inches(width / 100, (top - bottom) / 100)
 
 
-def rbox(ax, x, y, w, h, fill, radius=14, z=2):
+def rbox(ax, x, y, w, h, fill, radius=14, z=2, edge="none", lw=0, ls="-"):
     ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle=f"round,pad=0,rounding_size={radius}", facecolor=fill,
-                                edgecolor="none", zorder=z))
+                                edgecolor=edge, linewidth=lw, linestyle=ls, zorder=z))
 
 
-def write(ax, x, y, text, size=18, bold=False, color=INK, ha="center", va="center", **kw):
+def write(ax, x, y, text, size=28, bold=False, color=INK, ha="center", va="center", **kw):
     return ax.text(x, y, text, fontsize=size, weight="bold" if bold else "normal", color=color,
                    ha=ha, va=va, zorder=kw.pop("zorder", 6), **kw)
 
 
-def text_width(ax, text, size, bold=False):
-    artist = ax.text(0, 0, text, fontsize=size, weight="bold" if bold else "normal")
+def text_width(ax, text, size, bold=False, family=None):
+    artist = ax.text(0, 0, text, fontsize=size, weight="bold" if bold else "normal", family=family)
     box = artist.get_window_extent(ax.figure.canvas.get_renderer())
     artist.remove()
     return box.width / ax.figure.dpi * 100
 
 
-WEAK_ENDS = ("it", "one", "a", "the", "of", "to", "and", "on", "in", "your")
-WORD = re.compile(r"^([\"'“‘(…]*)(.*?)([\"'”’).,;:!?…]*)$")
+def image(ax, path, cx, cy, size, z=5):
+    ax.imshow(plt.imread(path), extent=(cx - size / 2, cx + size / 2, cy - size / 2, cy + size / 2), zorder=z)
 
 
-def rich(ax, x, top, text, size, width, bold=(), color=INK, leading=1.6):
-    """Text from (x, top), wrapped to width, with the words in `bold` in bold; a line never ends on a short function
-    word, which moves to the next line. Straight quotes become curly. Returns the bottom edge."""
+def arrow(ax, a, b, color=INK, lw=3, rad=0.0, z=4, head=22):
+    ax.add_patch(FancyArrowPatch(a, b, arrowstyle=f"-|>,head_length={head / 20},head_width={head / 34}",
+                                 connectionstyle=f"arc3,rad={rad}", color=color, lw=lw, zorder=z,
+                                 mutation_scale=20, shrinkA=0, shrinkB=0))
+
+
+def number(ax, x, y, k, size=26):
+    ax.add_patch(Circle((x, y), size * 0.95, color=INK, zorder=5))
+    write(ax, x, y - 1, str(k), size, True, "white")
+
+
+def pill(ax, x, y, text, size, fill, color=INK, bold=True):
+    """A rounded label whose left edge is x and centre height y; returns its right edge."""
+    w = text_width(ax, text, size, bold) + size * 1.1
+    h = size * PT * 1.55
+    rbox(ax, x, y - h / 2, w, h, fill, radius=h / 2, z=4)
+    write(ax, x + w / 2, y, text, size, bold, color)
+    return x + w
+
+
+# Text with bold and highlighted words, wrapped to a width.
+
+WEAK_ENDS = ("it", "one", "a", "the", "of", "to", "and", "on", "in", "your", "by")
+
+
+def curly(text):
     text = re.sub(r"(\w)'(\w)", "\\1\u2019\\2", text)
-    text = re.sub(r"'(?=\w)", "\u2018", text).replace("'", "\u2019")
+    return re.sub(r"'(?=\w)", "\u2018", text).replace("'", "\u2019")
+
+
+def rich(ax, x, top, text, size, width, marks=(), color=INK, leading=1.5, max_lines=None):
+    """Text from (x, top), wrapped to width. marks: (start, end, kind) character spans, kind 'bold' or 'new' (bold on a
+    highlight: never seen in training). A line never ends on a short function word. Returns the bottom edge."""
+    text = curly(text)
     space = text_width(ax, "a a", size) - text_width(ax, "aa", size)
     words = []
-    for w in text.split():
-        pre, core, post = WORD.match(w).groups()
-        b = core in bold
-        words.append((pre, core, post, b,
-                      text_width(ax, pre, size) + text_width(ax, core, size, b) + text_width(ax, post, size)))
+    for m in re.finditer(r"\S+", text):
+        kinds = {k for a, b, k in marks if a < m.end() and b > m.start()}
+        new, bold = "new" in kinds, bool(kinds)
+        words.append((m.group(), bold, new, text_width(ax, m.group(), size, bold)))
     lines, line, used = [], [], 0
     for wd in words:
-        if line and used + space + wd[4] > width:
+        if line and used + space + wd[3] > width:
             moved = []
-            while len(line) > 1 and line[-1][1].lower() in WEAK_ENDS and not line[-1][3]:
+            while len(line) > 1 and line[-1][0].lower() in WEAK_ENDS and not line[-1][1]:
                 moved.insert(0, line.pop())
             lines.append(line)
             line = moved
-            used = sum(m[4] for m in moved) + space * max(len(moved) - 1, 0)
-        used += (space if line else 0) + wd[4]
+            used = sum(m[3] for m in moved) + space * max(len(moved) - 1, 0)
+        used += (space if line else 0) + wd[3]
         line.append(wd)
     lines.append(line)
+    if max_lines and len(lines) > max_lines:
+        lines = lines[:max_lines]
+        last = lines[-1]
+        while last and sum(w[3] for w in last) + space * len(last) + text_width(ax, "…", size) > width:
+            last.pop()
+        if last:
+            t, b, n, _ = last[-1]
+            last[-1] = (t.rstrip(".,;:") + "…", b, n, text_width(ax, t.rstrip(".,;:") + "…", size, b))
     step = size * PT * leading
     for i, ln in enumerate(lines):
-        cy = top - size * PT * 0.85 - i * step
-        segs = []  # [bold, text, glued to the previous segment]
-        for pre, core, post, b, _ in ln:
-            if pre:
-                segs.append([False, pre, False])
-            segs.append([b, core, bool(pre)])
-            if post:
-                segs.append([False, post, True])
-        merged = []
-        for b, t, glue in segs:
-            if merged and not b and not merged[-1][0]:
-                merged[-1][1] += ("" if glue else " ") + t
+        cy = top - size * PT * 0.8 - i * step
+        segs = []   # runs of words with the same style: [bold, new, text]
+        for t, b, n, _ in ln:
+            if segs and segs[-1][0] == b and segs[-1][1] == n:
+                segs[-1][2] += " " + t
             else:
-                merged.append([b, t, glue])
+                segs.append([b, n, t])
         cx = x
-        for k, (b, t, glue) in enumerate(merged):
-            if k and not glue:
+        for k, (b, n, t) in enumerate(segs):
+            if k:
                 cx += space
+            tw = text_width(ax, t, size, b)
+            if n:
+                hh = size * PT * 1.3
+                rbox(ax, cx - 5, cy - hh / 2 - 2, tw + 10, hh, NEW, radius=8, z=3)
             write(ax, cx, cy, t, size, b, color, ha="left")
-            cx += text_width(ax, t, size, b)
-    return top - size * PT * 0.85 - (len(lines) - 1) * step - size * PT * 0.85
+            cx += tw
+    return top - size * PT * 0.8 - (len(lines) - 1) * step - size * PT * 0.7
 
 
-def rich_height(text, size, width, bold=(), **kw):
-    fig, ax = canvas(1240, 1000)
-    h = 1000 - rich(ax, 0, 1000, text, size, width, bold, **kw)
+def rich_height(text, size, width, marks=(), **kw):
+    fig, ax = canvas(2000)
+    h = 2000 - rich(ax, 0, 2000, text, size, width, marks, **kw)
     plt.close(fig)
     return h
 
 
-def data(arm=ARM):
-    import torch
-    return load(f"eval_{arm}.json"), torch.load(RES / f"profiles_{arm}.pt", weights_only=False)
+def bubble(ax, x, top, w, text, fill, color, size, marks=(), tail="right", pad=26, max_lines=None):
+    """A chat bubble whose top-left corner is (x, top); returns its bottom edge."""
+    h = 2 * pad + rich_height(text, size, w - 2 * pad, marks, max_lines=max_lines)
+    rbox(ax, x, top - h, w, h, fill, radius=30, z=3)
+    side = 1 if tail == "right" else -1
+    edge = x + w if tail == "right" else x
+    tip = [(edge - side * 34, top - h), (edge + side * 14, top - h - 6), (edge - side * 4, top - h + 30)]
+    ax.add_patch(Polygon(tip, closed=True, fc=fill, ec="none", zorder=3))
+    rich(ax, x + pad, top - pad, text, size, w - 2 * pad, marks, color=color, max_lines=max_lines)
+    return top - h
+
+
+# What an instruction says, and which of its parts training never saw.
+
+NEW_LAYER_PHRASES = [r"on prime-numbered layers", r"on every layer whose number is prime",
+                     r"on layers whose number is a perfect square", r"on the square-numbered layers",
+                     r"on layers whose number is a power of two", r"on layers 1, 2, 4, 8 and so on, doubling each time",
+                     r"in every layer except layers \d+ through \d+", r"everywhere but layers \d+ to \d+",
+                     r"on every (fourth|fifth) layer starting at layer \d+",
+                     r"every [45] layers, starting from layer \d+",
+                     r"on layers whose number is divisible by [45]", r"in a V shape[^.;]*", r"more the farther[^.;]*",
+                     r"in a (smooth )?wave[^.;]*"]
+NEW_TOKEN_PHRASES = [r"on every other token of your reply, starting with the first",
+                     r"on alternating tokens of your reply",
+                     r"less and less as your reply goes on", r"fading out over the course of your reply",
+                     r"only between tokens \d+ and \d+ of your reply", r"on reply tokens \d+ through \d+"]
+NEW_WORDING = ([re.escape(v) for v in spec.UP["test"] + spec.DOWN["test"]]
+               + [r"the activation for", r"\bfeature\b", r"your inner sense of", r"Quietly, inside your layers,",
+                  r"Your hidden-state assignment for this reply:", r"Before you answer and the whole time you answer,",
+                  r"Instruction for your residual stream:", r"Secret request:", r"Do not talk about it\."])
 
 
 def instruction_only(user, task):
     """The instruction without the question."""
-    text = user.replace(task, "").strip()
-    return " ".join(text.split())
+    return " ".join(user.replace(task, "").split())
 
 
-def concept_words(it):
-    return tuple(w for ci in it["concepts"] for w in K.NAMES[ci].split() + K.PHRASES[ci].split()
-                 if w not in ("the", "color"))
+def spans(text, patterns, kind):
+    return [(m.start(), m.end(), kind) for p in patterns for m in re.finditer(p, text)]
+
+
+def concept_patterns(cis):
+    out = []
+    for ci in cis:
+        for w in {K.NAMES[ci], K.PHRASES[ci]}:
+            w = re.sub(r"^the ", "", w)
+            out.append(r"\b" + re.escape(w) + r"s?\b")
+    return out
+
+
+def marks_for(text, it, new):
+    """Bold concept names; highlight what training never saw: new in {'concept', 'wording', 'layers', 'tokens'}."""
+    out = spans(text, concept_patterns(it["concepts"]), "new" if "concept" in new else "bold")
+    if "wording" in new:
+        out += spans(text, NEW_WORDING, "new")
+    if "layers" in new:
+        out += spans(text, NEW_LAYER_PHRASES, "new")
+    if "tokens" in new:
+        out += spans(text, NEW_TOKEN_PHRASES, "new")
+    return out
 
 
 # Requested and achieved changes as heatmaps: layers upward, reply tokens rightward.
@@ -176,6 +261,11 @@ LIM = 3.0   # SD at either end of the colour scale
 T_SHOWN = 64
 
 
+def data(arm=ARM):
+    import torch
+    return load(f"eval_{arm}.json"), torch.load(RES / f"profiles_{arm}.pt", weights_only=False)
+
+
 def grid(prof, key, k=0):
     """[T_SHOWN, L] change of the k-th requested concept; tokens after the end of the reply are NaN."""
     a = prof[key].float().numpy()[:, :, k]
@@ -184,7 +274,7 @@ def grid(prof, key, k=0):
     return out
 
 
-def heat(ax, x, y, w, h, A, radius=8):
+def heat(ax, x, y, w, h, A, radius=10):
     rbox(ax, x, y, w, h, "white", radius=radius, z=2)
     im = ax.imshow(np.clip(A.T, -LIM, LIM), cmap=DIV, vmin=-LIM, vmax=LIM, origin="lower", interpolation="nearest",
                    extent=(x, x + w, y, y + h), zorder=3, aspect="auto")
@@ -194,126 +284,553 @@ def heat(ax, x, y, w, h, A, radius=8):
     im.set_clip_path(clip)
 
 
-def colour_scale(ax, cx, y, w=420, h=22, size=19):
+def heat_axes(ax, x, y, w, h, L, size=22, tokens=True, layers=True):
+    if layers:
+        write(ax, x - 10, y + 10, "0", size, color=MUTED, ha="right")
+        write(ax, x - 10, y + h - 10, str(L - 1), size, color=MUTED, ha="right")
+        write(ax, x - 22, y + h / 2, "layer", size, color=MUTED, ha="right")
+    if tokens:
+        write(ax, x + 4, y - 22, "0", size, color=MUTED, ha="left")
+        write(ax, x + w / 2, y - 22, "reply token", size, color=MUTED)
+        write(ax, x + w - 4, y - 22, str(T_SHOWN - 1), size, color=MUTED, ha="right")
+
+
+def colour_scale(ax, cx, y, w=440, h=26, size=26):
     """The colour scale, centred at cx: lowered on the left, raised on the right."""
     x = cx - w / 2
     ramp = np.linspace(-LIM, LIM, 256)[None, :]
     im = ax.imshow(ramp, cmap=DIV, vmin=-LIM, vmax=LIM, extent=(x, x + w, y - h / 2, y + h / 2), zorder=3,
                    aspect="auto")
-    clip = FancyBboxPatch((x, y - h / 2), w, h, boxstyle="round,pad=0,rounding_size=6", transform=ax.transData,
+    clip = FancyBboxPatch((x, y - h / 2), w, h, boxstyle="round,pad=0,rounding_size=8", transform=ax.transData,
                           facecolor="none", edgecolor="none")
     ax.add_patch(clip)
     im.set_clip_path(clip)
-    write(ax, x - 16, y, "lowered", size, True, ha="right")
-    write(ax, x + w + 16, y, "raised", size, True, ha="left")
+    write(ax, x - 18, y, "lowered", size, True, ha="right")
+    write(ax, x + w + 18, y, "raised", size, True, ha="left")
     for v, lab in ((-LIM, f"−{LIM:.0f} SD"), (0, "0"), (LIM, f"+{LIM:.0f} SD")):
-        write(ax, x + w * (v + LIM) / (2 * LIM), y - h / 2 - 22, lab, size - 2)
+        write(ax, x + w * (v + LIM) / (2 * LIM), y - h / 2 - 26, lab, size - 4, color=MUTED)
 
 
-def pick(items, ok, med=None):
-    """Index of the item, among those ok() accepts, whose pattern match r is closest to the median r of all items
-    (or to med); instructions ending in "it" or using words the figure wording rules ban are skipped."""
-    rs = [it["r"] for it in items if "r" in it]
-    med = np.median(rs) if med is None else med
-    idx = [i for i, it in enumerate(items) if "r" in it and ok(it)
-           and not re.search(r"\bit\W*$|\bit\.|\b(push|carr|keep|kept|hold|held|drift)",
-                             instruction_only(it["user"], TASKS[it["task"]]), re.I)]
-    return min(idx, key=lambda i: abs(items[i]["r"] - med)) if idx else None
+def block(target):
+    """(l0, l1, t0, t1) of a target that is one value on a block of layers and reply tokens, else None."""
+    nz = np.abs(target) > 1e-6
+    if not nz.any():
+        return None
+    ls, ts = np.nonzero(nz.any(0))[0], np.nonzero(nz.any(1))[0]
+    sub = target[ts[0]:ts[-1] + 1, ls[0]:ls[-1] + 1]
+    return (ls[0], ls[-1], ts[0], ts[-1]) if np.allclose(sub, sub.flat[0]) else None
 
 
-def heat_rows(ax, y, rows, columns, W, text_w=620, hw=320, gap=22, size=22, tag_size=17):
-    """One panel per row: a tag naming what is new, the instruction, and one heatmap per column and requested
-    concept. rows: (tag, item, profile); columns: (header, profile key). Returns the bottom edge."""
-    x0 = 40 + text_w + 80
+def requested_box(ax, x, y, w, h, b, L, T):
+    l0, l1, t0, t1 = b
+    bx, by = x + w * t0 / T, y + h * l0 / L
+    rbox(ax, bx, by, w * (t1 + 1 - t0) / T, h * (l1 + 1 - l0) / L, "none", radius=6, z=5, edge=INK, lw=3,
+         ls=(0, (4, 3)))
+
+
+# 1. The trained model next to the original model on one instruction.
+
+def overview(s="new_concepts", i=52):
+    """An instruction about a concept never seen in training, the reply and the concept's change per layer and reply
+    token, for the original Qwen3-4B and the trained model (results/eval_q4c.json, profiles_q4c.pt)."""
+    E, P = data()
+    it, prof = E["sets"][s]["items"][i], P[s][i]
+    name = K.NAMES[it["concepts"][0]]
+    fig, ax = canvas(3000)
+    y = 2960
+    text = " ".join(it["user"].split())
+    y = bubble(ax, 140, y, W - 170, text, BLUE, "white", 30, spans(text, concept_patterns(it["concepts"]), "bold"))
+    y -= 40
+    x = W - 30 - text_width(ax, f"{name}: a concept never seen in training", 26, True) - 30
+    pill(ax, x, y, f"{name}: a concept never seen in training", 26, NEW)
+    y -= 50
+    pw, gap = (W - 3 * 24) / 2, 24
+    tgt = grid(prof, "target")
+    b = block(tgt)
+    L = tgt.shape[1]
+    top = y
+    bottoms = []
+    for k, (head, avatar, reply, key, fill, hc) in enumerate(
+            (("Qwen3-4B", "robot.png", it["orig_reply"], "orig_dz", PANEL, INK),
+             ("Trained", "magician.png", it["reply"], "dz", LAVENDER, PURPLE))):
+        px = 24 + k * (pw + gap)
+        yy = top - 70
+        write(ax, px + pw / 2, yy, head, 46, True, hc)
+        yy -= 70
+        asz = 120 if avatar == "robot.png" else 175
+        ry = bubble(ax, px + 160, yy, pw - 190, " ".join(reply.split()), "white", INK, 25, tail="left",
+                    max_lines=4)
+        image(ax, ASSETS / avatar, px + 80, ry + 40 + (12 if avatar == "magician.png" else 0), asz, z=6)
+        yy = ry - 60
+        write(ax, px + 40, yy, f"change in {name} representation", 26, True, ha="left")
+        yy -= 34
+        hw = pw - 110
+        hh = hw * 36 / 64
+        heat(ax, px + 80, yy - hh, hw, hh, grid(prof, key))
+        if b:
+            requested_box(ax, px + 80, yy - hh, hw, hh, b, L, T_SHOWN)
+        heat_axes(ax, px + 80, yy - hh, hw, hh, L)
+        bottoms.append((px, yy - hh - 60, fill))
+    bottom = min(bt for _, bt, _ in bottoms)
+    for k, (px, _, fill) in enumerate(bottoms):
+        rbox(ax, px, bottom, pw, top - bottom, fill, radius=30, z=1)
+    y = bottom - 60
+    colour_scale(ax, W / 2, y)
+    if b:
+        y -= 100
+        lab = f"requested change: {tgt[b[2], b[0]]:+.0f} SD"
+        x = W / 2 - (76 + text_width(ax, lab, 26, True)) / 2
+        rbox(ax, x, y - 18, 56, 36, "none", radius=6, z=5, edge=INK, lw=3, ls=(0, (4, 3)))
+        write(ax, x + 76, y, lab, 26, True, ha="left")
+    crop(fig, ax, y - 50, 3000)
+    save(fig, "overview")
+
+
+# 2. How a concept's representation and an instruction's target are defined.
+
+def fit(ax, text, size, width, bold=False):
+    """The largest font size up to size at which text fits in width."""
+    while size > 12 and text_width(ax, text, size, bold) > width:
+        size -= 1
+    return size
+
+
+def recipe(ci_name="clouds"):
+    ci = K.NAMES.index(ci_name)
+    fig, ax = canvas(3000)
+    y = 2950
+    number(ax, 50, y, 1)
+    write(ax, 92, y, "A direction for each concept at each layer", 34, True, ha="left")
+    y -= 80
+    bw, x2 = 390, 40 + 390 + 70
+    boxes = ((40, "average activation on", f"sentences with {ci_name}",
+              [s.format(X=K.PHRASES[ci]) for s in K.SENTENCES[:2]], "… 40 sentences"),
+             (x2, "the same sentences with", f"{len(K.TRAIN_CONCEPTS)} training concepts",
+              [K.SENTENCES[0].format(X="pizza"), K.SENTENCES[1].format(X="pirates")], "… averaged"))
+    for x, small, big, sents, more in boxes:
+        write(ax, x + bw / 2, y, small, fit(ax, small, 24, bw), color=MUTED)
+        write(ax, x + bw / 2, y - 40, big, fit(ax, big, 28, bw, True), True)
+        h = 300
+        rbox(ax, x, y - 80 - h, bw, h, PANEL, radius=22, z=1)
+        yy = y - 104
+        for s in sents:
+            yy = rich(ax, x + 24, yy, s, 24, bw - 48, spans(s, [re.escape(K.PHRASES[ci]), "pizza", "pirates"], "bold"))
+            yy -= 18
+        write(ax, x + 24, yy - 16, more, 24, color=MUTED, ha="left")
+    mid = y - 80 - 150
+    write(ax, 40 + bw + 35, mid, "−", 60, True)
+    write(ax, x2 + bw + 35, mid, "=", 60, True)
+    ax0 = x2 + bw + 70
+    ax.add_patch(FancyArrowPatch((ax0, mid - 90), (ax0 + 150, mid + 90), arrowstyle="-|>,head_length=1.4,"
+                                 "head_width=0.8", color=INK, lw=6, mutation_scale=20, zorder=4))
+    cx = (ax0 + W - 20) / 2 + 10
+    write(ax, cx, mid - 130, ci_name, 28, True)
+    write(ax, cx, mid - 166, "direction", 28, True)
+    write(ax, cx, mid - 202, "at each layer", 24, color=MUTED)
+    y = mid - 270
+    y = rich(ax, 40, y, f"The {ci_name} representation at a layer and reply token: the residual stream's projection on "
+             "this direction, in standard deviations (SD) of the original model's replies to the training questions.",
+             26, W - 80, color=INK)
+    y -= 90
+    number(ax, 50, y, 2)
+    write(ax, 92, y, "An exact target behind every instruction", 34, True, ha="left")
+    y -= 60
+    L = 36
+    tgt = np.zeros((T_SHOWN, L))
+    tgt[:, :18] = 1.0
+    hw, hh = 380, 380 * 36 / 64
+    write(ax, 120 + hw / 2, y - 16, f"target for {ci_name}", 26, True)
+    heat(ax, 120, y - 50 - hh, hw, hh, tgt)
+    heat_axes(ax, 120, y - 50 - hh, hw, hh, L, size=22)
+    write(ax, 120 + hw / 2, y - 50 - 3 * hh / 4, "+1 SD", 28, True)
+    write(ax, 120 + hw / 2, y - 50 - hh / 4, "0", 28, True, MUTED)
+    wordings = ["Internally, enhance the clouds direction by 1 SD in your shallower half of layers.",
+                "Gently boost your internal representation of clouds in layers 0 through 17.",
+                "As you write your reply, turn up your clouds activations by 1 standard deviation in the first half "
+                "of your layers."]
+    x0 = 120 + hw + 110
+    arrow(ax, (120 + hw + 20, y - 50 - hh / 2), (x0 - 20, y - 50 - hh / 2), lw=5, head=30)
+    yy = y
+    for t in wordings:
+        yy = bubble(ax, x0, yy, W - 30 - x0, t, BLUE, "white", 24, spans(t, [r"\bclouds\b"], "bold"), pad=20) - 30
+    y = min(yy, y - 50 - hh - 40)
+    crop(fig, ax, y - 30, 3000)
+    save(fig, "recipe")
+
+
+# 3. One training step: a loss at every layer, one backward pass through all of them.
+
+def column_heat(ax, x, y, step, bw, h, A):
+    """A [T, L] change with one column per layer at x + l * step (width bw), reply tokens downward from y."""
+    sub = 10
+    on = max(1, round(sub * bw / step))
+    T, L = A.shape
+    M = np.full((T, L * sub), np.nan)
+    for l in range(L):
+        M[:, l * sub:l * sub + on] = A[:, l:l + 1]
+    ax.imshow(np.clip(M, -LIM, LIM), cmap=DIV, vmin=-LIM, vmax=LIM, origin="upper", interpolation="nearest",
+              extent=(x, x + L * step, y - h, y), zorder=3, aspect="auto")
+
+
+def training():
+    """One training step of the Qwen3-4B adapter on a training instruction (results/step_example_q4c.pt, from
+    magician/step_example.py): the change it makes at every layer and reply token next to the requested change."""
+    import torch
+    S = torch.load(RES / "step_example_q4c.pt", weights_only=False)
+    tgt, dz = S["target"].float().numpy(), S["dz"].float().numpy()
+    n, L = tgt.shape
+    name = K.NAMES[S["concept"]]
+    question = TASKS[S["task"]]
+    instr = instruction_only(S["user"], question)
+    fig, ax = canvas(3200)
+    y = 3150
+    number(ax, 50, y, 3)
+    write(ax, 92, y, "One training step", 34, True, ha="left")
+    y -= 60
+    # the input: one token sequence, prompt then reply
+    w1 = 560
+    prompt = instr + " " + question
+    marks = spans(prompt, [re.escape(name)], "bold")
+    write(ax, 30, y - 6, "prompt", 24, True, MUTED, ha="left")
+    write(ax, 30 + w1 + 20, y - 6, "reply", 24, True, MUTED, ha="left")
+    top = y - 36
+    pad = 22
+    h1 = rich_height(prompt, 24, w1 - 2 * pad, marks)
+    reply = " ".join(S["reply"].split())
+    h2 = rich_height(reply, 24, W - 30 - (30 + w1 + 20) - 2 * pad, max_lines=4)
+    h = max(h1, h2) + 2 * pad
+    rbox(ax, 30, top - h, w1, h, BLUE, radius=24, z=2)
+    rich(ax, 30 + pad, top - pad, prompt, 24, w1 - 2 * pad, marks, color="white")
+    rbox(ax, 30 + w1 + 20, top - h, W - 30 - (30 + w1 + 20), h, REPLY, radius=24, z=2)
+    rich(ax, 30 + w1 + 20 + pad, top - pad, reply, 24, W - 30 - (30 + w1 + 20) - 2 * pad, max_lines=4)
+    for k, t in enumerate(("the original model's reply", "to the question alone, fixed")):
+        write(ax, 30 + w1 + 20, top - h - 30 - 34 * k, curly(t), 23, color=MUTED, ha="left")
+    y = top - h - 84
+    # the model: a LoRA in every layer
+    sx, ex = 130, 900
+    step = (ex - sx) / L
+    bw = step * 0.66
+    ftop = y - 70
+    arrow(ax, (200, top - h - 4), (200, ftop + 4), lw=4, head=24)
+    write(ax, 230, ftop + 30, "a LoRA on every attention and MLP matrix", 24, True, PURPLE, ha="left")
+    st, sb = ftop - 70, ftop - 270
+    fbot = sb - 60
+    rbox(ax, sx - 24, fbot, ex - sx + 48, ftop - fbot, "white", radius=24, z=1, edge=PURPLE_LIGHT, lw=3)
+    write(ax, sx, ftop - 36, "layer 0", 22, color=MUTED, ha="left")
+    write(ax, ex - step + bw, ftop - 36, f"layer {L - 1}", 22, color=MUTED, ha="right")
+    for l in range(L):
+        rbox(ax, sx + l * step, sb, bw, st - sb, PURPLE_LIGHT, radius=5, z=3, edge=PURPLE, lw=1.6)
+    # the backward pass reaches every layer's LoRA
+    comb = sb - 30
+    for l in range(L):
+        c = sx + l * step + bw / 2
+        ax.add_patch(FancyArrowPatch((c, comb), (c, sb - 2), arrowstyle="-|>,head_length=0.5,head_width=0.35",
+                                     color=PURPLE, lw=2, mutation_scale=20, zorder=4))
+    # output
+    mid = (st + sb) / 2
+    ox = ex + 60
+    arrow(ax, (ex + 26, mid), (ox - 6, mid), lw=4, head=24)
+    write(ax, ox, mid + 18, "next-token", 24, True, ha="left")
+    write(ax, ox, mid - 18, "probabilities", 24, True, ha="left")
+    # readouts at every layer and reply token
+    hh = 130
+    y = fbot - 50
+    rows = ((f"change in {name} representation", "LoRA on minus LoRA off, reading the same tokens", dz),
+            ("requested change", None, tgt))
+    for lab, sub, A in rows:
+        write(ax, sx - 24, y, lab, 24, True, ha="left")
+        if sub:
+            y -= 34
+            write(ax, sx - 24, y, sub, 22, color=MUTED, ha="left")
+        y -= 28
+        column_heat(ax, sx, y, step, bw, hh, A)
+        write(ax, ex + 14, y - 12, "reply token 0", 21, color=MUTED, ha="left")
+        write(ax, ex + 14, y - hh + 12, str(n - 1), 21, color=MUTED, ha="left")
+        y -= hh + 50
+    # loss
+    ltop = y - 10
+    arrow(ax, ((sx + ex) / 2, y + 40), ((sx + ex) / 2, ltop + 2), lw=4, head=24)
+    kx = W - 70
+    arrow(ax, (kx, mid - 44), (kx, ltop + 2), lw=4, head=24)
+    lx, pad = 110, 30
+    lines = [("loss = (change − requested change)², summed over every layer and reply token", 27, True, "white"),
+             ("+ the same for each other training concept, where the requested change is near zero", 24, False,
+              "#D8D8DC"),
+             ("+ KL divergence from the original model's next-token probabilities on the question alone", 24, False,
+              "#D8D8DC")]
+    hs = [rich_height(t, sz, W - 30 - lx - 2 * pad, [(0, len(t), "bold")] if b else ()) for t, sz, b, _ in lines]
+    lh = sum(hs) + 16 * (len(lines) - 1) + 2 * pad
+    rbox(ax, lx, ltop - lh, W - 30 - lx, lh, INK, radius=24, z=3)
+    yy = ltop - pad
+    for (t, sz, b, c), hl in zip(lines, hs):
+        rich(ax, lx + pad, yy, t, sz, W - 30 - lx - 2 * pad, [(0, len(t), "bold")] if b else (), color=c)
+        yy -= hl + 16
+    # the backward pass starts at the loss
+    ax.plot([lx, 60, 60, sx + (L - 1) * step + bw / 2], [ltop - lh / 2, ltop - lh / 2, comb, comb], color=PURPLE,
+            lw=4, ls=(0, (5, 3)), zorder=4)
+    t = (f"One backward pass from this loss (averaged over 16 instructions) updates the LoRAs of all {L} layers "
+         "together, not one layer at a time.")
+    y = rich(ax, lx, ltop - lh - 24, t, 26, W - 30 - lx, [(0, len(t), "bold")], color=PURPLE)
+    crop(fig, ax, y - 30, 3200)
+    save(fig, "training")
+
+
+# 4. What training saw, and what it never saw.
+
+LAYER_NAMES = {"all": "all layers", "range": "a range", "first": "first k", "last": "last k", "region": "a third",
+               "half": "a half", "single": "one layer", "list": "a list", "parity": "even or odd",
+               "every3": "every 3rd", "ramp_up": "ramp up", "ramp_down": "ramp down", "bump": "a bump",
+               "every45": "every 4th or 5th", "prime": "prime", "square": "perfect squares", "power2": "powers of two",
+               "except": "all but a range", "vshape": "V shape", "wave": "wave"}
+TOKEN_NAMES = {"all": "every token", "first": "first n tokens", "after": "after n tokens", "grow": "growing",
+               "alternate": "alternating", "fade": "fading", "between": "between two tokens"}
+LAYER_SEEN = ["all", "range", "first", "last", "region", "half", "single", "list", "parity", "every3", "ramp_up",
+              "ramp_down", "bump"]
+
+
+def strip(ax, x, y, w, h, f):
+    n = len(f)
+    cw = w / n
+    for i, v in enumerate(f):
+        ax.add_patch(Rectangle((x + i * cw, y), cw * 0.82, h, fc=DIV((np.clip(2 * v, -LIM, LIM) + LIM) / (2 * LIM)),
+                               ec="none", zorder=3))
+
+
+def split():
+    """The axes of an instruction, as the q4c run was trained (spec.py at the training commit) and tested."""
+    fig, ax = canvas(4000)
+    y = 3960
+    lx, ax0, bx0, cw = 30, 250, 735, 440
+    hs = fit(ax, "Never seen in training", 34, cw - 30, True)
+    write(ax, ax0 + cw / 2, y - 20, "In training", hs, True)
+    pill(ax, bx0 + cw / 2 - (text_width(ax, "Never seen in training", hs, True) + 37) / 2, y - 20,
+         "Never seen in training", hs, NEW)
+    y -= 70
+    top = y
+
+    def row(label, h):
+        nonlocal y
+        write(ax, lx, y - 14, label, 28, True, ha="left", va="top", linespacing=1.25)
+        y0 = y
+        y -= h
+        return y0
+
+    def text_cells(y0, a, b, size=25):
+        ya = rich(ax, ax0 + 20, y0 - 18, a, size, cw - 40)
+        yb = rich(ax, bx0 + 20, y0 - 18, b, size, cw - 40)
+        return min(ya, yb)
+
+    entries = [("Concepts", "135, such as volcanoes, wizards, pirates, thunder and the moon",
+                "45 others, such as robots, stars, snow, whales and chess"),
+               ("Wording", "20 verbs (raise, boost, turn down …), 7 sentence forms, 12 openings",
+                "8 other verbs (crank up, heighten, quiet down …), 3 sentence forms, 5 openings")]
+    for label, a, b in entries:
+        y0 = row(label, 0)
+        y = text_cells(y0, a, b) - 40
+    for label, fams_a, fams_b, n, names, pattern in (
+            ("Layers", LAYER_SEEN, spec.LAYER_TEST, 36, LAYER_NAMES, spec.layer_pattern),
+            ("Reply\ntokens", spec.TOKEN_BASIC, spec.TOKEN_TEST, 64, TOKEN_NAMES, None)):
+        y0 = row(label, 0)
+        bottoms = []
+        for col_x, fams in ((ax0, fams_a), (bx0, fams_b)):
+            yy = y0 - 20
+            per_row = 1 if len(fams) * 2 <= len(fams_a) + 1 else 2
+            for k, fam in enumerate(fams):
+                cx = col_x + 20 + (k % per_row) * (cw - 20) / 2
+                if k % per_row == 0 and k:
+                    yy -= 92
+                rng = random.Random(3)
+                if pattern:
+                    f, _ = pattern(rng, fam, n)
+                else:
+                    f, _ = spec.token_pattern(rng, fam, n)
+                sw = 170 if per_row == 1 else (cw - 60) / 2
+                strip(ax, cx, yy - 26, sw, 26, f)
+                if per_row == 1:
+                    write(ax, cx + sw + 14, yy - 13, names[fam], 23, ha="left")
+                else:
+                    write(ax, cx, yy - 56, names[fam], 23, ha="left")
+            bottoms.append(yy - 92)
+        y = min(bottoms) - 10
+    for label, a, b in (("Edits", "1 or 2 concepts per instruction", "3 concepts in one instruction"),
+                        ("Questions", "232 questions", "78 other questions, in every test")):
+        y0 = row(label, 0)
+        y = text_cells(y0, a, b) - 40
+    rbox(ax, bx0 - 10, y + 10, cw + 20, top - y + 4, NEW_PANEL, radius=22, z=1)
+    rbox(ax, ax0 - 10, y + 10, cw + 20, top - y + 4, PANEL, radius=22, z=1)
+    crop(fig, ax, y - 20, 4000)
+    save(fig, "split")
+
+
+# 5. Scores on every test set.
+
+SCORE_ROWS = (("seen", "Concept, wording and patterns"), ("new_wording", "Wording"), ("new_concepts", "Concept"),
+              ("three_edits", "Three edits at once"), ("new_token_patterns", "Reply-token pattern"),
+              ("new_layer_patterns", "Layer pattern"), ("all_new", "Concept, wording and layer pattern"))
+
+
+def hbars(ax, x0, x1, lo, hi, y, vals, cols, hs, fmt, cis=None, size=24):
+    """Horizontal bars from zero for one row; vals, cols, hs per bar, top to bottom. Returns the row's bottom."""
+    sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
+    yy = y
+    for k, (v, c, h) in enumerate(zip(vals, cols, hs)):
+        if v is None:
+            yy -= h + 6
+            continue
+        a, b = sorted((sx(0), sx(v)))
+        rbox(ax, a, yy - h, max(b - a, 2), h, c, radius=min(6, h / 2), z=3)
+        if cis and cis[k]:
+            cl, ch = cis[k]
+            ax.plot([sx(cl), sx(ch)], [yy - h / 2] * 2, color=INK, lw=2, zorder=4, solid_capstyle="butt")
+            for e in (cl, ch):
+                ax.plot([sx(e)] * 2, [yy - h / 2 - 7, yy - h / 2 + 7], color=INK, lw=2, zorder=4)
+        if fmt:
+            end = max(sx(v), sx(cis[k][1]) if cis and cis[k] else sx(v))
+            if c == ORIG:   # the original model: always right of zero, so the label stays out of the label column
+                write(ax, max(end, sx(0)) + 12, yy - h / 2, fmt(v), size, True, c, ha="left")
+            elif v >= 0:
+                write(ax, end + 12, yy - h / 2, fmt(v), size, True, c if c != TGT else INK, ha="left")
+            else:
+                st = min(sx(v), sx(cis[k][0]) if cis and cis[k] else sx(v))
+                write(ax, st - 12, yy - h / 2, fmt(v), size, True, c, ha="right")
+        yy -= h + 6
+    return yy
+
+
+def axis(ax, x0, x1, lo, hi, y, ticks, top, size=22):
+    sx = lambda v: x0 + (x1 - x0) * (v - lo) / (hi - lo)
+    ax.plot([sx(0)] * 2, [y + 20, top], color=INK, lw=2, zorder=2)
+    for v, lab in ticks:
+        write(ax, sx(v), y, lab, size, color=MUTED)
+
+
+def scores():
+    """Each test set: the share of the requested change and the pattern match r of the trained model and the original
+    model (mean and 95% bootstrap interval over 96 instructions; results/eval_q4c.json)."""
+    E, _ = data()
+    fig, ax = canvas(3000)
+    y = 2960
+    lab_w = 390
+    pct = lambda v: "0%" if round(100 * v) == 0 else f"{100 * v:.0f}%".replace("-", "−")
+    dec = lambda v: "0.00" if round(v, 2) == 0 else f"{v:.2f}".replace("-", "−")
+    panels = (("share of the", "requested change", 420, 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")),
+               pct, "frac"),
+              ("pattern", "match r", 830, 1150, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
+    for h1, h2, a, b, lo, hi, *_ in panels:
+        z = a + (b - a) * (0 - lo) / (hi - lo)
+        write(ax, z, y - 20, h1, 26, True, ha="left")
+        write(ax, z, y - 56, h2, 26, True, ha="left")
+    y -= 110
+    top = y + 20
+    for key, label in SCORE_ROWS:
+        if key == "seen":
+            pill(ax, 24, y, "In training", 24, PANEL)
+            y -= 56
+        if key == "new_wording":
+            y -= 24
+            pill(ax, 24, y, "Never seen in training", 24, NEW)
+            y -= 56
+        S = E["sets"][key]["summary"]
+        rows_bottom = []
+        for _, _, a, b, lo, hi, ticks, fmt, k in panels:
+            m, cl, ch = S[k][:3]
+            o = S["orig"][k][0]
+            rows_bottom.append(hbars(ax, a, b, lo, hi, y, [m, o], [PURPLE, ORIG], [34, 14], fmt,
+                                     cis=[(cl, ch), None]))
+        lb = rich(ax, 30, y + 6, label, 27, lab_w - 20)
+        y = min(min(rows_bottom), lb) - 22
+    for _, _, a, b, lo, hi, ticks, fmt, k in panels:
+        axis(ax, a, b, lo, hi, y, ticks, top)
+    y -= 70
+    x = 30
+    for lab, col in (("trained model", PURPLE), ("original Qwen3-4B", ORIG)):
+        rbox(ax, x, y - 15, 30, 30, col, radius=6)
+        write(ax, x + 42, y, lab, 25, True, ha="left")
+        x += 42 + text_width(ax, lab, 25, True) + 50
+    ax.plot([x, x + 40], [y, y], color=INK, lw=2)
+    for e in (x, x + 40):
+        ax.plot([e] * 2, [y - 7, y + 7], color=INK, lw=2)
+    write(ax, x + 52, y, "95% interval", 25, True, ha="left")
+    crop(fig, ax, y - 40, 3000)
+    save(fig, "scores")
+
+
+# 6. Typical instructions from the test sets, as heatmaps.
+
+def heat_rows(ax, y, rows, columns, hw, gap=20, size=27):
+    """One panel per row: a tag, the instruction (parts never seen in training highlighted) and one heatmap per column
+    and requested concept. rows: (tag, new, item, profile); columns: (header, profile key). Returns the bottom edge."""
+    x0 = (W - len(columns) * hw - (len(columns) - 1) * gap) / 2 + 30
     hh = hw * 36 / 64
     for k, (head, _) in enumerate(columns):
-        write(ax, x0 + k * (hw + gap) + hw / 2, y, head, 21, True)
-    y -= 34
-    for tag, it, prof in rows:
+        write(ax, x0 + k * (hw + gap) + hw / 2, y, head, 30, True, PURPLE if head == "trained model" else INK)
+    y -= 44
+    for tag, new, it, prof in rows:
         text = instruction_only(it["user"], TASKS[it["task"]])
-        bold = concept_words(it)
+        marks = marks_for(text, it, new)
         nc = len(it["concepts"])
-        sub = 26 if nc > 1 else 0
-        heat_h = nc * hh + (nc - 1) * (sub + 14)
-        th = 32 + rich_height(text, size, text_w - 20, bold=bold)
-        h = max(heat_h + 2 * 30 + sub, th + 2 * 30)
-        rbox(ax, 16, y - h, W - 32, h, PANEL, radius=22, z=1)
-        ty = y - (h - th) / 2
-        write(ax, 40, ty - 8, tag.upper(), tag_size, True, GRAY, ha="left")
-        rich(ax, 40, ty - 32, text, size, text_w - 20, bold=bold)
-        hy = y - (h - heat_h - sub) / 2
+        sub = 40 if nc > 1 else 0
+        th = rich_height(text, size, W - 100, marks)
+        h = 30 + 50 + th + 30 + nc * (hh + sub) + (nc - 1) * 18 + 30
+        rbox(ax, 16, y - h, W - 32, h, PANEL, radius=26, z=1)
+        pill(ax, 40, y - 44, tag, 22, NEW if new else "white", bold=True)
+        ty = rich(ax, 40, y - 80, text, size, W - 100, marks)
+        hy = ty - 30
         for c in range(nc):
-            top = hy - c * (hh + sub + 14) - sub
+            top = hy - c * (hh + sub + 18) - sub
             if nc > 1:
-                write(ax, x0, top + 14, K.NAMES[it["concepts"][c]], 18, True, ha="left")
+                write(ax, x0, top + 22, K.NAMES[it["concepts"][c]], 25, True, ha="left")
             for k, (_, key) in enumerate(columns):
                 heat(ax, x0 + k * (hw + gap), top - hh, hw, hh, grid(prof, key, c))
-            write(ax, x0 - 10, top - hh + 8, "0", 15, color=GRAY, ha="right")
-            write(ax, x0 - 10, top - 8, str(prof["target"].shape[1] - 1), 15, color=GRAY, ha="right")
-            write(ax, x0 - 44, top - hh / 2, "layer", 15, color=GRAY, rotation=90)
-        y -= h + 16
+            heat_axes(ax, x0, top - hh, hw, hh, prof["target"].shape[1], size=20, tokens=False)
+        y -= h + 18
     for k in range(len(columns)):
         xx = x0 + k * (hw + gap)
-        write(ax, xx + 4, y - 6, "0", 15, color=GRAY, ha="left")
-        write(ax, xx + hw / 2, y - 6, "reply token", 15, color=GRAY)
-        write(ax, xx + hw - 4, y - 6, str(T_SHOWN - 1), 15, color=GRAY, ha="right")
-    return y - 30
+        write(ax, xx + 4, y - 4, "0", 20, color=MUTED, ha="left")
+        write(ax, xx + hw / 2, y - 4, "reply token", 20, color=MUTED)
+        write(ax, xx + hw - 4, y - 4, str(T_SHOWN - 1), 20, color=MUTED, ha="right")
+    return y - 40
 
 
-def hero():
-    """Typical instructions on three held-out sets (the item closest to its set's median pattern match): the requested
-    change, the trained model's change, and the original model's change, per layer and reply token."""
+def examples():
+    """Instructions near the median pattern match of their test set (between its 35th and 65th percentile), with
+    concepts picked from those: requested, trained model and original model, per layer and reply token."""
     E, P = data()
     rows = []
-    for s, tag, ok in (("new_concepts", "concept never seen in training", lambda it: it["fams"][-1] != "tok_all"),
-                       ("new_wording", "wording never seen in training", lambda it: len(it["concepts"]) == 1),
-                       ("three_edits", "three edits in one instruction", lambda it: len(it["concepts"]) == 3)):
-        items = E["sets"][s]["items"]
-        i = pick(items, ok)
-        rows.append((tag, items[i], P[s][i]))
-    W = 1800
-    fig, ax = canvas(W, 4000)
-    y = 3960
-    write(ax, 24, y - 24, "Requested and achieved changes in Qwen3-4B", 32, True, ha="left")
-    y = heat_rows(ax, y - 100, rows, (("requested", "target"), ("trained model", "dz"), ("original model", "orig_dz")),
-                  W)
-    colour_scale(ax, 40 + 620 + 80 + (3 * 320 + 2 * 22) / 2, y - 30)
-    crop(fig, ax, y - 100, 4000)
-    save(fig, "hero")
+    for s, i, tag, new in (("seen", 38, "in training: only the question is new", ()),
+                           ("new_concepts", 79, "never seen in training: the concept", ("concept",)),
+                           ("new_wording", 47, "never seen in training: the wording", ("wording",)),
+                           ("three_edits", 19, "never seen in training: three edits at once", ("three",))):
+        rows.append((tag, new, E["sets"][s]["items"][i], P[s][i]))
+    fig, ax = canvas(6000)
+    y = heat_rows(ax, 5960, rows, (("requested", "target"), ("trained model", "dz"), ("original model", "orig_dz")),
+                  350)
+    colour_scale(ax, W / 2, y - 10)
+    crop(fig, ax, y - 80, 6000)
+    save(fig, "examples")
 
 
-def fails():
-    """Patterns over layers and reply tokens never seen in training: for each rule, the instruction whose pattern
-    match r is closest to the median of that rule's instructions."""
+def outside():
+    """Layer and reply-token patterns never seen in training: for each rule, an instruction near the median pattern
+    match of that rule."""
     E, P = data()
     rows = []
-    for s, fam, tag in (("new_layer_patterns", "prime", "prime-numbered layers"),
-                        ("new_layer_patterns", "power2", "layers that are powers of two"),
-                        ("new_token_patterns", "tok_alternate", "alternating reply tokens"),
-                        ("new_token_patterns", "tok_fade", "a change that fades over the reply")):
-        items = E["sets"][s]["items"]
-        ok = lambda it: fam in it["fams"] and len(it["concepts"]) == 1 and len(it["fams"]) == 2
-        med = np.median([it["r"] for it in items if "r" in it and ok(it)])
-        i = pick(items, ok, med)
-        rows.append((tag, items[i], P[s][i]))
-    W, tw, hw = 1800, 620, 480
-    fig, ax = canvas(W, 4000)
-    y = 3960
-    write(ax, 24, y - 24, "Patterns never seen in training", 32, True, ha="left")
-    y = heat_rows(ax, y - 100, rows, (("requested", "target"), ("trained model", "dz")), W, text_w=tw, hw=hw)
-    colour_scale(ax, 40 + tw + 80 + (2 * hw + 22) / 2, y - 30)
-    crop(fig, ax, y - 100, 4000)
-    save(fig, "fails")
+    for s, i, tag, new in (("new_layer_patterns", 21, "never seen in training: prime-numbered layers", ("layers",)),
+                           ("new_layer_patterns", 60, "never seen in training: powers of two", ("layers",)),
+                           ("new_token_patterns", 68, "never seen in training: alternating tokens", ("tokens",)),
+                           ("new_token_patterns", 57, "never seen in training: fading over the reply", ("tokens",))):
+        rows.append((tag, new, E["sets"][s]["items"][i], P[s][i]))
+    fig, ax = canvas(6000)
+    y = heat_rows(ax, 5960, rows, (("requested", "target"), ("trained model", "dz")), 520)
+    colour_scale(ax, W / 2, y - 10)
+    crop(fig, ax, y - 80, 6000)
+    save(fig, "outside")
 
 
-# Plans: the plan the trained model writes, the plan the original model writes, and what the trained model does.
-
+# 7. Plans: the plan the trained model writes, the plan the original model writes, and what the trained model does.
 
 def mono_width(ax, size):
-    a = ax.text(0, 0, "0" * 20, fontsize=size, family=MONO)
-    w = a.get_window_extent(ax.figure.canvas.get_renderer()).width / ax.figure.dpi * 100 / 20
-    a.remove()
-    return w
+    return text_width(ax, "0" * 20, size, family=MONO) / 20
 
 
 def plan_text(ax, x, top, text, size, width, wrong):
@@ -321,7 +838,7 @@ def plan_text(ax, x, top, text, size, width, wrong):
     Returns the bottom edge."""
     cw = mono_width(ax, size)
     per = max(int(width // cw), 10)
-    step = size * PT * 1.5
+    step = size * PT * 1.45
     y = top - size * PT * 0.8
     for raw in text.strip().split("\n"):
         words, n, in_layers = [], 0, False
@@ -353,19 +870,30 @@ def plan_text(ax, x, top, text, size, width, wrong):
                 if wd.endswith(";"):
                     in_layers = False
             y -= step
-    return y + step - size * PT * 0.8
+    return y + step - size * PT * 0.7
+
+
+def plan_layers(text, name, L):
+    """The per-layer change a plan asks for (averaged over reply tokens), and the layer numbers it names that the model
+    does not have; spec.parse_plan rejects a plan that names one, so those numbers are dropped before parsing."""
+    lists = re.findall(r"layers ([\d, ]+)", text)
+    beyond = {int(v) for m in lists for v in re.findall(r"\d+", m) if int(v) >= L}
+    named = re.sub(r"layers ([\d, ]+)", lambda m: "layers " + ", ".join(
+        v for v in re.findall(r"\d+", m.group(1)) if int(v) < L) + (" " if m.group(1).endswith(" ") else ""), text)
+    got = spec.parse_plan(named, L)
+    return (got[name].mean(1) if name in got else np.zeros(L)), beyond
 
 
 def layer_bars(ax, x, y, w, h, lo, hi, bars, bar_cols, achieved=None, size_line=None):
-    """Per-layer bars (wide, pale) and the achieved change (narrow, orange)."""
+    """Per-layer bars (wide, pale) and the achieved change (narrow, purple)."""
     sy = lambda v: y + h * (np.clip(v, lo, hi) - lo) / (hi - lo)
     n = len(bars)
     step = w / n
     if size_line is not None:
-        ax.plot([x, x + w], [sy(size_line)] * 2, color=PALE_GRAY, lw=1.2, zorder=2)
-        write(ax, x - 12, sy(size_line), f"{size_line:+.0f} SD".replace("-", "−"), 15, color=GRAY, ha="right")
-    ax.plot([x, x + w], [sy(0)] * 2, color=GRAY, lw=1.4, zorder=3)
-    write(ax, x - 12, sy(0), "0", 15, color=GRAY, ha="right")
+        ax.plot([x, x + w], [sy(size_line)] * 2, color=TGT, lw=1.4, zorder=2)
+        write(ax, x - 12, sy(size_line), f"{size_line:+g} SD".replace("-", "−"), 22, color=MUTED, ha="right")
+    ax.plot([x, x + w], [sy(0)] * 2, color=MUTED, lw=1.6, zorder=3)
+    write(ax, x - 12, sy(0), "0", 22, color=MUTED, ha="right")
     for i in range(n):
         cx = x + (i + 0.5) * step
         if abs(bars[i]) > 1e-6:
@@ -373,145 +901,72 @@ def layer_bars(ax, x, y, w, h, lo, hi, bars, bar_cols, achieved=None, size_line=
                                    fc=bar_cols[i], ec="none", zorder=4))
         if achieved is not None:
             ax.add_patch(Rectangle((cx - step * 0.22, min(sy(0), sy(achieved[i]))), step * 0.44,
-                                   abs(sy(achieved[i]) - sy(0)), fc=ACC, ec="none", zorder=5))
+                                   abs(sy(achieved[i]) - sy(0)), fc=PURPLE, ec="none", zorder=5))
 
 
-def plan():
-    """Two held-out layer-pattern instructions followed by the 1.7B model trained on plans alone (r17): the request,
-    the plan it writes and what it does, and the plan the original model writes after thinking and what the trained
-    model does with that plan (results/plan_examples_r17.pt, from magician/examples.py)."""
+def plan(items=(9, 42)):
+    """Two layer-pattern instructions never seen in training, followed by the 1.7B model trained on plans alone (r17):
+    the request, the plan it writes and what it does, and the plan the original model writes after thinking and what
+    the trained model does with that plan (results/plan_examples_r17.pt, from magician/examples.py)."""
     import torch
     recs = {r["idx"]: r for r in torch.load(RES / "plan_examples_r17.pt", weights_only=False)}
-    W = 1860
-    fig, ax = canvas(W, 5000)
-    y = 4960
-    write(ax, 24, y - 24, "Plans for layer patterns never seen in training", 32, True, ha="left")
-    y -= 90
-    tx, tw = 40, 720
-    x0, x1 = 880, 1620
-    xr = W - 24 - text_width(ax, "pattern match r", 20, True) / 2
-    write(ax, (x0 + x1) / 2, y, "change per layer, averaged over reply tokens", 20, True)
-    write(ax, xr, y, "pattern match r", 20, True)
-    y -= 40
-    for idx in (94, 66):
+    fig, ax = canvas(8000)
+    y = 7960
+    x0, x1, xr = 130, 950, 1075
+    for idx in items:
         rec = recs[idx]
         L = rec["own"]["target"].shape[1]
         tgt = rec["own"]["target"].float().numpy()[:, :, 0].mean(0)
         name = rec["own_plan"].split(":")[0]
         text = instruction_only(rec["user"], TASKS[rec["task"]])
-        bold = tuple(w + e for w in name.split() if w != "the" for e in ("", "s", "es"))
-        th = rich_height(text, 23, W - 120, bold=bold)
-        h = th + 64
-        rbox(ax, 16, y - h, W - 32, h, PANEL, radius=22, z=1)
-        write(ax, 40, y - 26, "INSTRUCTION", 17, True, GRAY, ha="left")
-        rich(ax, 40, y - 46, text, 23, W - 120, bold=bold)
-        y -= h + 30
-        vals = [tgt]
+        it = {"concepts": [K.NAMES.index(name)]}
+        marks = marks_for(text, it, ("layers",))
+        th = rich_height(text, 28, W - 100, marks)
+        h = th + 110
+        rbox(ax, 16, y - h, W - 32, h, PANEL, radius=26, z=1)
+        pill(ax, 40, y - 44, "never seen in training: the layer pattern", 22, NEW)
+        rich(ax, 40, y - 80, text, 28, W - 100, marks)
+        y -= h + 40
         rows = []
-        for key, lab, col in (("own", "plan the trained model writes", ACC),
-                              ("orig", "plan the original model writes after thinking", PLANNER)):
+        for key, lab, col in (("own", "plan the trained model writes", PURPLE),
+                              ("orig", "plan the original model writes after thinking", ORANGE)):
             ptxt = rec[f"{key}_plan"]
-            got = spec.parse_plan(ptxt, L)
-            pv = got[name].mean(1) if name in got else np.zeros(L)
+            pv, beyond = plan_layers(ptxt, name, L)
             ach = rec[key]["dz"].float().numpy()[:, :, 0].mean(0)
-            wrong = {i for i in range(L) if abs(pv[i] - tgt[i]) > 0.06}
+            wrong = {i for i in range(L) if abs(pv[i] - tgt[i]) > 0.06} | beyond
             rows.append((lab, col, ptxt, pv, ach, wrong, rec[key]["r"]))
-            vals += [pv, ach]
+        vals = [tgt] + [r[3] for r in rows] + [r[4] for r in rows]
         lo = min(min(v.min() for v in vals) - 0.4, -1.0)
         hi = max(max(v.max() for v in vals) + 0.4, 1.0)
-        size_line = float(tgt[np.argmax(np.abs(tgt))])
-        ch = 130
-        # requested
-        write(ax, tx, y - ch / 2, "requested", 21, True, ha="left")
+        size_line = round(float(tgt[np.argmax(np.abs(tgt))]), 2)
+        ch = 150
+        write(ax, 40, y, "requested", 28, True, ha="left")
+        y -= 30
         layer_bars(ax, x0, y - ch, x1 - x0, ch, lo, hi, tgt, [TGT] * L, size_line=size_line)
-        y -= ch + 34
+        y -= ch + 50
         for lab, col, ptxt, pv, ach, wrong, r in rows:
-            ax.scatter([tx + 9], [y - 14], s=200, color=col, linewidths=0, zorder=6)
-            write(ax, tx + 28, y - 14, lab, 21, True, ha="left")
-            bottom = plan_text(ax, tx, y - 40, ptxt, 17, tw, wrong)
-            rh = max(ch, y - bottom + 10)
-            cy = y - rh / 2 - 10
+            ax.add_patch(Circle((52, y), 12, color=col, zorder=6))
+            write(ax, 74, y, lab, 28, True, ha="left")
+            y = plan_text(ax, 40, y - 30, ptxt, 22, W - 80, wrong) - 24
             cols = [PALE_RED if i in wrong else TGT for i in range(L)]
-            layer_bars(ax, x0, cy - ch / 2, x1 - x0, ch, lo, hi, pv, cols, achieved=ach, size_line=size_line)
-            write(ax, xr, cy, f"{r:.2f}".replace("-", "−"), 26, True)
-            y -= rh + 34
-        write(ax, x0 + (x1 - x0) / (2 * L), y + 12, "0", 15, color=GRAY)
-        write(ax, x1 - (x1 - x0) / (2 * L), y + 12, str(L - 1), 15, color=GRAY)
-        write(ax, (x0 + x1) / 2, y + 12, "layer", 15, color=GRAY)
+            layer_bars(ax, x0, y - ch, x1 - x0, ch, lo, hi, pv, cols, achieved=ach, size_line=size_line)
+            write(ax, xr, y - ch / 2 + 22, f"{r:.2f}".replace("-", "−"), 34, True, PURPLE)
+            write(ax, xr, y - ch / 2 - 20, "pattern match r", 21, color=MUTED)
+            y -= ch + 50
+        write(ax, x0 + (x1 - x0) / (2 * L), y + 26, "0", 22, color=MUTED)
+        write(ax, x1 - (x1 - x0) / (2 * L), y + 26, str(L - 1), 22, color=MUTED)
+        write(ax, (x0 + x1) / 2, y + 26, "layer (change averaged over reply tokens)", 22, color=MUTED)
         y -= 50
     x = 40
-    for lab, kind, col in (("plan layer that matches the request", "bar", TGT),
-                           ("plan layer that differs from the request", "bar", PALE_RED),
-                           ("change the trained model makes", "bar", ACC)):
-        ax.add_patch(Rectangle((x, y - 13), 26, 26, fc=col, ec="none"))
-        write(ax, x + 36, y, lab, 19, True, ha="left")
-        x += 36 + text_width(ax, lab, 19, True) + 56
-    crop(fig, ax, y - 40, 5000)
+    for lab, col in (("plan layer that matches the request", TGT), ("plan layer that differs", PALE_RED),
+                     ("change the trained model makes", PURPLE)):
+        if x + 40 + text_width(ax, lab, 23, True) > W - 20:
+            x, y = 40, y - 50
+        ax.add_patch(Rectangle((x, y - 14), 28, 28, fc=col, ec="none"))
+        write(ax, x + 38, y, lab, 23, True, ha="left")
+        x += 38 + text_width(ax, lab, 23, True) + 44
+    crop(fig, ax, y - 40, 8000)
     save(fig, "plan")
-
-
-SCORE_ROWS = (("seen", "Kinds of instruction seen in training"), ("new_wording", "Wordings never seen in training"),
-              ("new_concepts", "Concepts never seen in training"), ("three_edits", "Three edits in one instruction"),
-              ("new_token_patterns", "Token patterns never seen in training"),
-              ("new_layer_patterns", "Layer patterns never seen in training"),
-              ("all_new", "New concept, layer pattern and wording at once"))
-
-
-def scores():
-    """Each held-out set: the share of the requested change and the pattern match r, original model to trained model
-    (mean and 95% bootstrap interval over 96 instructions)."""
-    E, _ = data()
-    W = 1800
-    fig, ax = canvas(W, 2000)
-    y = 1960
-    write(ax, 24, y - 24, "Qwen3-4B on instructions not used in training", 32, True, ha="left")
-    y -= 100
-    pct = lambda v: f"{100 * v:.0f}%"
-    num = lambda v: f"{v:.2f}".replace("-", "−")
-    panels = (("frac", "share of the requested change", 800, 1250, 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")),
-               pct),
-              ("r", "pattern match r", 1370, 1730, -0.2, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), num))
-    for _, head, a, b, *_ in panels:
-        write(ax, (a + b) / 2, y, head, 21, True)
-    y -= 56
-    top = y + 26
-    for n, (key, label) in enumerate(SCORE_ROWS):
-        if key == "new_token_patterns":
-            y -= 26
-        S = E["sets"][key]["summary"]
-        write(ax, 24, y, label, 22, ha="left")
-        for k, head, a, b, lo, hi, ticks, fmt in panels:
-            sx = lambda v: a + (b - a) * (np.clip(v, lo, hi) - lo) / (hi - lo)
-            m, cl, ch = S[k][:3]
-            o = S["orig"][k][0]
-            ax.plot([sx(o), sx(m)], [y, y], color=PALE_GRAY, lw=3, zorder=2, solid_capstyle="round")
-            ax.plot([sx(cl), sx(ch)], [y, y], color=ACC, lw=12, alpha=0.3, zorder=3, solid_capstyle="round")
-            ax.scatter([sx(o)], [y], s=200, color=GRAY, zorder=4, linewidths=2, edgecolors="white")
-            ax.scatter([sx(m)], [y], s=300, color=ACC, zorder=5, linewidths=2, edgecolors="white")
-            if m >= o:
-                write(ax, max(sx(ch), sx(m)) + 16, y, fmt(m), 20, True, ha="left")
-            else:
-                write(ax, min(sx(cl), sx(m)) - 16, y, fmt(m), 20, True, ha="right")
-        y -= 70
-    for k, head, a, b, lo, hi, ticks, fmt in panels:
-        sx = lambda v: a + (b - a) * (np.clip(v, lo, hi) - lo) / (hi - lo)
-        for v, lab in ticks:
-            ax.plot([sx(v)] * 2, [y + 40, top], color=GRID, lw=1.2, zorder=1)
-            write(ax, sx(v), y + 14, lab, 17, color=GRAY)
-    y -= 50
-    x = 24
-    for lab, col, s in (("trained model", ACC, 300), ("original model", GRAY, 200)):
-        ax.scatter([x + 10], [y], s=s, color=col, linewidths=0)
-        write(ax, x + 30, y, lab, 20, True, ha="left")
-        x += 30 + text_width(ax, lab, 20, True) + 60
-    ax.plot([x, x + 40], [y, y], color=ACC, lw=12, alpha=0.3, solid_capstyle="round")
-    write(ax, x + 56, y, "95% interval", 20, True, ha="left")
-    crop(fig, ax, y - 40, 2000)
-    save(fig, "scores")
-
-
-PLAN_GROUPS = (("Qwen3-1.7B", (("n17", "no plan"), ("p17", "plan"), ("r17", "plan, also trained on plan alone"))),
-               ("Qwen3-4B", (("p4", "plan"), ("r4", "plan, also trained on plan alone"))))
 
 
 def base_plan(k, key="new_layer_patterns"):
@@ -523,128 +978,105 @@ def base_plan(k, key="new_layer_patterns"):
         return bp and bp["summary"]
 
 
-def dot_legend(ax, x, y, entries, width, size=20):
-    """Dots, diamonds or a tick with labels in ink, wrapping to a new line at width; returns the last line's y."""
-    for lab, col, kind in entries:
-        w = 30 + text_width(ax, lab, size, True)
-        if x + w > width - 20:
-            x, y = 24, y - 46
-        if kind in ("dot", "diamond"):
-            ax.scatter([x + 10], [y], s=260 if kind == "dot" else 170, color=col, linewidths=0,
-                       marker="o" if kind == "dot" else "D")
-        else:
-            ax.plot([x + 10, x + 10], [y - 16, y + 16], color=col, lw=3)
-        write(ax, x + 30, y, lab, size, True, ha="left")
-        x += w + 56
+PLAN_SOURCES = (("plan the trained model writes", PURPLE), ("plan the original model writes after thinking", ORANGE),
+                ("exact plan", INK))
+
+
+def legend(ax, y, entries, size=24):
+    x = 30
+    for lab, col in entries:
+        w = 42 + text_width(ax, lab, size, True)
+        if x + w > W - 20:
+            x, y = 30, y - 48
+        rbox(ax, x, y - 15, 30, 30, col, radius=6)
+        write(ax, x + 42, y, lab, size, True, ha="left")
+        x += w + 46
     return y
+
+
+def bar_panels(ax, y, groups, lab_w=380):
+    """Two stacked panels of grouped bars: plan exactly right (own, original-model plan) and pattern match r (own,
+    original-model plan, exact plan). groups: (group label or None, [(row label, exact pair, r triple)])."""
+    pct = lambda v: f"{100 * v:.0f}%"
+    num = lambda v: f"{v:.2f}".replace("-", "−")
+    rmin = min(v for _, rows in groups for _, _, r in rows for v in r if v is not None)
+    rlo = 0.0 if rmin >= 0 else np.floor((rmin - 0.2) * 10) / 10
+    for title, lo, hi, ticks, fmt, pick, cols in (
+            ("plan exactly right", 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")), pct, 1, (PURPLE, ORANGE)),
+            ("pattern match r", rlo, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), num, 2, (PURPLE, ORANGE, INK))):
+        write(ax, 30, y, title, 30, True, ha="left")
+        y -= 60
+        top = y + 16
+        for g, (group, rows) in enumerate(groups):
+            if group:
+                y -= 24 if g else 0
+                write(ax, 30, y, group, 26, True, MUTED, ha="left")
+                y -= 48
+            for lab, ex, r in rows:
+                vals = ex if pick == 1 else r
+                if vals is None or all(v is None for v in vals):
+                    write(ax, lab_w + 40, y - 18, "no plan", 23, color=MUTED, ha="left")
+                    lb = rich(ax, 30, y + 8, lab, 26, lab_w - 30)
+                    y = min(y - 60, lb - 20)
+                    continue
+                bottom = hbars(ax, lab_w + 30, 1080, lo, hi, y, vals, cols, [22] * len(vals), fmt, size=23)
+                lb = rich(ax, 30, y + 6, lab, 26, lab_w - 30)
+                y = min(bottom, lb) - 24
+        axis(ax, lab_w + 30, 1080, lo, hi, y, ticks, top)
+        y -= 90
+    return y
+
+
+PLAN_GROUPS = (("Qwen3-1.7B", (("n17", "trained without plans"), ("p17", "trained with plans"),
+                                ("r17", "trained with plans, also on plans alone"))),
+               ("Qwen3-4B", (("p4", "trained with plans"), ("r4", "trained with plans, also on plans alone"))))
 
 
 def plans():
     """Layer patterns never trained on: how often a plan is exactly right, and the pattern match r with the plan the
     trained model writes, the plan the original model writes after thinking, and the exact plan."""
-    W = 1800
-    fig, ax = canvas(W, 2400)
-    y = 2360
-    write(ax, 24, y - 24, "Layer patterns never seen in training", 32, True, ha="left")
-    y -= 100
-    xp, x0, x1, lo, hi = 830, 1000, 1740, -0.1, 0.8
-    sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
-    write(ax, xp, y, "plan exactly right", 21, True)
-    write(ax, (x0 + x1) / 2, y, "pattern match r", 21, True)
-    y -= 40
-    top = y
+    groups = []
     for group, arms in PLAN_GROUPS:
-        y -= 26
-        write(ax, 24, y, group.upper(), 17, True, GRAY, ha="left")
-        y -= 46
+        rows = []
         for k, lab in arms:
-            if not (RES / f"eval_{k}.json").exists():
-                continue
             S = load(f"eval_{k}.json")["sets"]["new_layer_patterns"]
             bp = base_plan(k)
-            write(ax, 24, y, lab, 22, ha="left")
             pe = S["summary"].get("plan_exact")
-            if pe:
-                for dx, col, v in ((-120, ACC, pe[0]), (20, PLANNER, bp and bp["plan_exact"][0])):
-                    if v is None:
-                        continue
-                    ax.scatter([xp + dx], [y], s=150, color=col, linewidths=0)
-                    write(ax, xp + dx + 18, y, f"{100 * v:.0f}%", 22, True, ha="left")
-            else:
-                write(ax, xp, y, "–", 22, True)
-            seen = load(f"eval_{k}.json")["sets"]["seen"]["summary"]["r"][0]
-            ax.plot([sx(seen)] * 2, [y - 18, y + 18], color=GRAY, lw=3, zorder=3)
-            own = S["summary"]["r"][0]
-            pts = [(own, ACC, 7)]
-            if "forced" in S:
-                pts.append((S["forced"]["summary"]["r"][0], GIVEN, 8))
-            if bp:
-                pts.append((bp["r"][0], PLANNER, 6))
-            vs = [p[0] for p in pts]
-            ax.plot([sx(min(vs)), sx(max(vs))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
-            for v, col, z in pts:
-                ax.scatter([sx(v)], [y], s=300 if col != GIVEN else 190, color=col, zorder=z, linewidths=2,
-                           edgecolors="white", marker="o" if col != GIVEN else "D")
-            y -= 66
-    for v in (0, 0.4, 0.8):
-        ax.plot([sx(v)] * 2, [y + 36, top], color=GRID, lw=1.2, zorder=1)
-        write(ax, sx(v), y + 12, f"{v:g}", 17, color=GRAY)
-    y = dot_legend(ax, 24, y - 50, (("plan the trained model writes", ACC, "dot"),
-                                    ("plan the original model writes after thinking", PLANNER, "dot"),
-                                    ("exact plan", GIVEN, "diamond"), ("patterns seen in training", GRAY, "tick")), W)
-    crop(fig, ax, y - 40, 2400)
+            ex = [pe[0], bp and bp["plan_exact"][0]] if pe else None
+            r = [S["summary"]["r"][0], bp and bp["r"][0], S["forced"]["summary"]["r"][0] if "forced" in S else None]
+            rows.append((lab, ex, r))
+        groups.append((group, rows))
+    fig, ax = canvas(4000)
+    y = bar_panels(ax, 3960, groups)
+    y = legend(ax, y + 20, PLAN_SOURCES)
+    crop(fig, ax, y - 40, 4000)
     save(fig, "plans")
 
 
 RULES = (("every45", "every 4th or 5th layer"), ("power2", "powers of two"), ("prime", "prime-numbered layers"),
-         ("square", "perfect squares"), ("except", "every layer except"), ("vshape", "V shape"), ("wave", "wave"))
+         ("square", "perfect squares"), ("except", "every layer except a range"), ("vshape", "V shape"),
+         ("wave", "wave"))
 
 
 def rules(arm="r17", planner_arm="r17think"):
-    """Layer patterns never trained on, by rule (the first layer pattern of each instruction): how often each plan is
-    exactly right, and the pattern match r with the plan the trained model writes, the plan the original model writes
-    after thinking, and the exact plan."""
+    """Layer patterns never trained on, by rule (the first layer pattern of each instruction), Qwen3-1.7B trained also
+    on plans alone: how often each plan is exactly right, and the pattern match r with each plan."""
     S = load(f"eval_{arm}.json")["sets"]["new_layer_patterns"]
     B = load(f"eval_{planner_arm}.json")["sets"]["new_layer_patterns"]["base_plan"]["items"]
     own, given = S["items"], S["forced"]["items"]
-    W = 1800
-    fig, ax = canvas(W, 2400)
-    y = 2360
-    write(ax, 24, y - 24, "Layer patterns never seen in training, by rule (Qwen3-1.7B)", 32, True, ha="left")
-    y -= 100
-    xp, x0, x1, lo, hi = 640, 820, 1740, -0.3, 0.8
-    sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
-    write(ax, xp, y, "plan exactly right", 21, True)
-    write(ax, (x0 + x1) / 2, y, "pattern match r", 21, True)
-    y -= 66
-    top = y + 30
+    rows = []
     for fam, lab in RULES:
         J = [j for j, it in enumerate(own) if it["fams"][0] == fam]
-        if not J:
-            continue
         m = lambda items, k: float(np.mean([items[j].get(k, 0.0) for j in J]))
-        write(ax, 24, y, lab, 22, ha="left")
-        for dx, col, v in ((-120, ACC, m(own, "plan_exact")), (20, PLANNER, m(B, "plan_exact"))):
-            ax.scatter([xp + dx], [y], s=150, color=col, linewidths=0)
-            write(ax, xp + dx + 18, y, f"{100 * v:.0f}%", 22, True, ha="left")
-        pts = [(m(own, "r"), ACC, 7), (m(B, "r"), PLANNER, 6), (m(given, "r"), GIVEN, 8)]
-        vs = [p[0] for p in pts]
-        ax.plot([sx(min(vs)), sx(max(vs))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
-        for v, col, z in pts:
-            ax.scatter([sx(v)], [y], s=300 if col != GIVEN else 190, color=col, zorder=z, linewidths=2,
-                       edgecolors="white", marker="o" if col != GIVEN else "D")
-        y -= 66
-    for v in (0, 0.4, 0.8):
-        ax.plot([sx(v)] * 2, [y + 36, top], color=GRID, lw=1.2, zorder=1)
-        write(ax, sx(v), y + 12, f"{v:g}", 17, color=GRAY)
-    y = dot_legend(ax, 24, y - 50, (("plan the trained model writes", ACC, "dot"),
-                                    ("plan the original model writes after thinking", PLANNER, "dot"),
-                                    ("exact plan", GIVEN, "diamond")), W)
-    crop(fig, ax, y - 40, 2400)
+        rows.append((lab, [m(own, "plan_exact"), m(B, "plan_exact")], [m(own, "r"), m(B, "r"), m(given, "r")]))
+    fig, ax = canvas(5000)
+    y = bar_panels(ax, 4960, [(None, rows)])
+    y = legend(ax, y + 20, PLAN_SOURCES)
+    crop(fig, ax, y - 40, 5000)
     save(fig, "rules")
 
 
-FIGURES = ("hero", "scores", "fails", "plan", "plans", "rules")
+FIGURES = ("overview", "recipe", "training", "split", "scores", "examples", "outside", "plan", "plans", "rules")
 
 if __name__ == "__main__":
     style()
