@@ -803,6 +803,71 @@ def scores():
     save(fig, "scores")
 
 
+# 5b. What the two scores are computed from: every cell of one instruction.
+
+CONCEPT_COLOURS = ("#1A9E77", "#D95F02", "#2A6FDB")
+CELL_EXAMPLES = (("three_edits", 15), ("three_edits", 52), ("new_layer_patterns", 2))
+
+
+def datapoints():
+    """For three instructions, every (reply token, layer, requested concept) cell as a dot: requested change against
+    achieved change of the trained Qwen3-4B, with the least-squares line through the origin
+    (results/profiles_q4c.pt)."""
+    E, P = data()
+    fig, ax = canvas(4000)
+    y = 3960
+    x0, x1, h = 740, 1170, 470
+    for s, j in CELL_EXAMPLES:
+        it, p = E["sets"][s]["items"][j], P[s][j]
+        q, a = p["target"].float().numpy(), p["dz"].float().numpy()
+        cis = list(dict.fromkeys(it["concepts"]))
+        text = instruction_only(it["user"], TASKS[it["task"]])
+        bottom = rich(ax, 30, y, text, 25, 560, marks_for(text, it, ()))
+        ly = bottom - 46
+        for k, ci in enumerate(cis):
+            ax.scatter([44], [ly], s=180, color=CONCEPT_COLOURS[k], lw=0, zorder=4)
+            write(ax, 62, ly, K.NAMES[ci], 25, True, ha="left")
+            ly -= 44
+        slope = float((a * q).sum() / (q ** 2).sum())
+        r = float(np.corrcoef(a.ravel(), q.ravel())[0, 1])
+        ly -= 14
+        write(ax, 30, ly, f"share of the requested change {slope:.2f}", 25, True, ha="left")
+        ly -= 44
+        ax.plot([30, 72], [ly, ly], color=INK, lw=3)
+        write(ax, 86, ly, "slope = share", 25, ha="left")
+        ly -= 44
+        write(ax, 30, ly, f"pattern match r {r:.2f}".replace("-", "−"), 25, True, ha="left")
+        ly -= 44
+        ax.plot([30, 72], [ly, ly], color=MUTED, lw=2.5, ls=(0, (4, 3)))
+        write(ax, 86, ly, "achieved = requested", 25, ha="left")
+        ly -= 30
+        top = y - 6
+        qlo, qhi = min(q.min(), 0) - 0.4, max(q.max(), 0) + 0.4
+        alo, ahi = np.floor(min(a.min(), qlo)), np.ceil(max(a.max(), qhi))
+        sx = lambda v: x0 + (x1 - x0) * (v - qlo) / (qhi - qlo)
+        sy = lambda v: top - h + h * (v - alo) / (ahi - alo)
+        for k in range(len(cis)):
+            ax.scatter(sx(q[..., k].ravel()), sy(a[..., k].ravel()), s=7, color=CONCEPT_COLOURS[k], alpha=0.3, lw=0,
+                       zorder=3)
+        lo, hi = max(qlo, alo), min(qhi, ahi)
+        ax.plot([sx(lo), sx(hi)], [sy(lo), sy(hi)], color=MUTED, lw=2.5, ls=(0, (4, 3)), zorder=4)
+        ax.plot([sx(qlo), sx(qhi)], [sy(np.clip(slope * qlo, alo, ahi)), sy(np.clip(slope * qhi, alo, ahi))],
+                color=INK, lw=3, zorder=5)
+        ax.plot([x0, x0], [top - h, top], color=INK, lw=2)
+        ax.plot([x0, x1], [top - h, top - h], color=INK, lw=2)
+        for v in range(int(np.ceil(qlo)), int(np.floor(qhi)) + 1):
+            ax.plot([sx(v)] * 2, [top - h, top - h - 10], color=INK, lw=2)
+            write(ax, sx(v), top - h - 32, f"{v:+d}".replace("-", "−") if v else "0", 22, color=MUTED)
+        for v in range(int(alo), int(ahi) + 1):
+            ax.plot([x0, x0 - 10], [sy(v)] * 2, color=INK, lw=2)
+            write(ax, x0 - 16, sy(v), f"{v:+d}".replace("-", "−") if v else "0", 22, color=MUTED, ha="right")
+        write(ax, (x0 + x1) / 2, top - h - 76, "requested change (SD)", 24, True)
+        write(ax, x0 - 92, top - h / 2, "achieved change (SD)", 24, True, rotation=90)
+        y = min(ly, top - h - 100) - 70
+    crop(fig, ax, y + 30, 4000)
+    save(fig, "datapoints")
+
+
 # 6. Typical instructions from the test sets, as heatmaps.
 
 def heat_rows(ax, y, rows, columns, hw, gap=20, size=27):
@@ -1124,7 +1189,8 @@ def rules(arm="r17", planner_arm="r17think"):
     save(fig, "rules")
 
 
-FIGURES = ("overview", "recipe", "training", "split", "scores", "examples", "outside", "plan", "plans", "rules")
+FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "plan", "plans",
+           "rules")
 
 if __name__ == "__main__":
     style()
