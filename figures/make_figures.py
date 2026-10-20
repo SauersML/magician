@@ -675,10 +675,11 @@ def training():
         if note:
             write(ax, cx + lp + 40, top - h / 2 - 34, note, 22, color=MUTED, ha="left", va="top")
 
-    def concepts(top, cols):
+    def concepts(top, cols, labels=True):
         """Each concept's Δz above its target; returns the bottom edge."""
-        write(ax, x0 - 14, top - mh / 2, "Δz", 22, color=MUTED, ha="right")
-        write(ax, x0 - 14, top - 1.5 * mh - 8, "target", 22, color=MUTED, ha="right")
+        if labels:
+            write(ax, x0 - 14, top - mh / 2, "Δz", 22, color=MUTED, ha="right")
+            write(ax, x0 - 14, top - 1.5 * mh - 8, "target", 22, color=MUTED, ha="right")
         for k, (dz, tg, nm) in enumerate(cols):
             x = x0 + k * (mw + mg)
             mini(dz, x, top)
@@ -690,9 +691,9 @@ def training():
     yy = ctop - lp - 80
     term(yy, 2 * mh + 8, "", "MSE", "requested\nconcept")
     yy = concepts(yy, [(S["dz"].float().numpy(), tgt, name)]) - 30
-    term(yy, 2 * mh + 8, "+", "MSE", f"{len(K.TRAIN_CONCEPTS) - 1} other\nconcepts")
+    term(yy, 2 * mh + 8, "+", "MSE", "other concepts:\nonly their overlap\nwith " + name)
     dzo, tgo = S["dz_others"].float().numpy(), S["target_others"].float().numpy()
-    yb2 = concepts(yy, [(dzo[:, :, k], tgo[:, :, k], K.NAMES[c]) for k, c in enumerate(S["others"])])
+    yb2 = concepts(yy, [(dzo[:, :, k], tgo[:, :, k], K.NAMES[c]) for k, c in enumerate(S["others"])], False)
     write(ax, x0 + 3 * mw + 2 * mg + 24, yy - mh - 4, "…", 34, True, MUTED)
     yy = yb2 - 30
     ph = plan_height(S["plan"], 18, aw - 40) + 36
@@ -723,12 +724,15 @@ def training():
     sx, ex = cx + 40, cx + cw - 40
     step = (ex - sx) / L
     bw = step * 0.66
-    btop = cbot - 140
-    arrow(ax, (cx + cw / 2, cbot - 6), (cx + cw / 2, btop + 30), PURPLE, lw=5, head=30)
-    write(ax, cx + cw / 2 + 50, cbot - 50, "backward pass", 26, True, PURPLE, ha="left")
-    ax.plot([sx, sx, ex - step + bw, ex - step + bw], [btop + 6, btop + 22, btop + 22, btop + 6], color=PURPLE, lw=3,
-            zorder=4, solid_capstyle="round")
+    btop = cbot - 150
+    comb = btop + 56
+    ax.plot([cx + cw / 2] * 2, [cbot - 6, comb], color=PURPLE, lw=4, zorder=4)
+    write(ax, cx + cw / 2 + 24, (cbot + comb) / 2, "backward pass", 26, True, PURPLE, ha="left")
+    ax.plot([sx + bw / 2, ex - step + bw / 2], [comb] * 2, color=PURPLE, lw=3, zorder=4, solid_capstyle="round")
     for l in range(L):
+        c = sx + l * step + bw / 2
+        ax.add_patch(FancyArrowPatch((c, comb), (c, btop + 2), arrowstyle="-|>,head_length=0.45,head_width=0.3",
+                                     color=PURPLE, lw=1.8, mutation_scale=20, zorder=4, shrinkA=0, shrinkB=0))
         rbox(ax, sx + l * step, btop - 130, bw, 130, PURPLE_LIGHT, radius=5, z=3, edge=PURPLE, lw=1.6)
     write(ax, sx, btop - 160, "layer 0", 22, color=MUTED, ha="left")
     write(ax, ex - step + bw, btop - 160, f"layer {L - 1}", 22, color=MUTED, ha="right")
