@@ -400,9 +400,9 @@ BASE = USER   # plans written by the original model (planner.py)
 
 
 def base_plan(k):
-    """Summary of the held-out layer patterns carried out from the original model's plans: from the run's own evaluation,
-    or from baseplan_<arm>.json (planner.py run apart from the evaluation)."""
-    for f in (f"eval_{k}.json", f"baseplan_{k}.json"):
+    """Summary of the held-out layer patterns carried out from the plans the original model writes after thinking
+    (eval_<arm>think.json: evaluate.py --plan_think 1024)."""
+    for f in (f"eval_{k}think.json",):
         if (RES / f).exists():
             bp = load(f)["sets"]["new_layer_patterns"].get("base_plan")
             if bp:
@@ -451,7 +451,7 @@ def plans():
     y -= 50
     x = 20
     for lab, col, kind in (("plan the trained model writes, or no plan", ACC, "dot"),
-                           ("plan the original model writes", BASE, "dot"), ("exact plan", GIVEN, "dot"),
+                           ("plan the original model writes after thinking", BASE, "dot"), ("exact plan", GIVEN, "dot"),
                            ("patterns seen in training", GRAY, "tick")):
         w = 22 + text_width(ax, lab, 20, True)
         if x + w > width - 20:
@@ -464,6 +464,58 @@ def plans():
         x += w + 60
     crop(fig, ax, y - 40, 2000)
     save(fig, "plans")
+
+
+RULES = (("every45", "every 4th or 5th layer"), ("power2", "powers of two"), ("prime", "prime layers"),
+         ("square", "perfect squares"), ("except", "every layer except"), ("vshape", "V shape"), ("wave", "wave"))
+
+
+def rules(arm="r17", planner_arm="r17think"):
+    """Layer patterns never trained on, by rule: pattern match r with the plan the trained model writes, the plan the
+    original model writes, and the exact plan, and how often each written plan is exactly right."""
+    S = load(f"eval_{arm}.json")["sets"]["new_layer_patterns"]
+    B = load(f"eval_{planner_arm}.json")["sets"]["new_layer_patterns"]["base_plan"]["items"] \
+        if (RES / f"eval_{planner_arm}.json").exists() else S["base_plan"]["items"]
+    own, given = S["items"], S["forced"]["items"]
+    width = 1500
+    fig, ax = canvas(width, 2000)
+    y = 1960
+    write(ax, 20, y - 20, "Layer patterns never trained on, by rule", 30, True, ha="left")
+    y -= 80
+    xp, x0, x1, lo, hi = 470, 700, 1460, -0.2, 1.0
+    sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
+    write(ax, xp, y, "plan exactly right", 20, True)
+    write(ax, (x0 + x1) / 2, y, "pattern match r", 20, True)
+    y -= 50
+    top = y + 20
+    for fam, lab in RULES:
+        J = [j for j, it in enumerate(own) if it["fams"][0] == fam]
+        if not J:
+            continue
+        m = lambda items, k: float(np.mean([items[j].get(k, 0.0) for j in J]))
+        write(ax, 20, y, lab, 22, ha="left")
+        write(ax, xp - 10, y, f"{100 * m(own, 'plan_exact'):.0f}%", 22, True, ACC, ha="right")
+        write(ax, xp + 10, y, f"{100 * m(B, 'plan_exact'):.0f}%", 22, True, BASE, ha="left")
+        pts = [m(own, "r"), m(B, "r"), m(given, "r")]
+        ax.plot([sx(min(pts)), sx(max(pts))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
+        for v, col, z in zip(pts, (ACC, BASE, GIVEN), (6, 5, 4)):
+            ax.scatter([sx(v)], [y], s=260, color=col, zorder=z, linewidths=0)
+        y -= 64
+    for v in (0, 0.5, 1.0):
+        ax.plot([sx(v)] * 2, [y + 30, top], color=PALE_GRAY, lw=1.2, ls=(0, (3, 3)), zorder=1)
+        write(ax, sx(v), y + 6, f"{v:.1f}", 18)
+    y -= 50
+    x = 20
+    for lab, col in (("plan the trained model writes", ACC), ("plan the original model writes after thinking", BASE),
+                     ("exact plan", GIVEN)):
+        w = 22 + text_width(ax, lab, 20, True)
+        if x + w > width - 20:
+            x, y = 20, y - 44
+        ax.scatter([x], [y], s=260, color=col, linewidths=0)
+        write(ax, x + 22, y, lab, 20, True, col if col != GIVEN else INK, ha="left")
+        x += w + 60
+    crop(fig, ax, y - 40, 2000)
+    save(fig, "rules")
 
 
 TASKS = None
