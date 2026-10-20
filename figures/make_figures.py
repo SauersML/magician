@@ -1,7 +1,9 @@
-"""Draw every figure in figures/ from results/ (eval_<arm>.json and profiles_<arm>.pt of an evaluated adapter)."""
+"""Draw every figure in figures/ from results/: eval_<arm>.json and profiles_<arm>.pt of evaluated adapters, and
+plan_examples_<arm>.pt from magician/examples.py. Usage: python make_figures.py [figure ...] (default: every figure)."""
 
 import json
 import re
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -10,25 +12,32 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import font_manager
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import FancyBboxPatch, Rectangle
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "results"
 OUT = ROOT / "figures"
+sys.path.insert(0, str(ROOT / "magician"))
+import concepts as K  # noqa: E402
+import spec  # noqa: E402
 
 INK = "#1D1D1F"
 PANEL = "#F4F4F6"
-USER = "#3478F6"
-REPLY = "#E9E9EB"
-EVEN = "#E8772E"  # even layers, and the token "even"
-ODD = "#5E5CE6"  # odd layers, and the token "odd"
-PALE_EVEN = "#FCE3CF"
-PALE_ODD = "#E3E2FB"
 RED = "#D2432F"
 GRAY = "#A1A1A6"
 PALE_GRAY = "#D1D1D6"
+GRID = "#E5E5EA"
+ACC = "#E8772E"       # the trained model and the change it makes
+TGT = "#D1D1D6"       # the requested change
+PLANNER = "#6250D6"   # plans the original model writes (planner.py)
+GIVEN = INK           # the exact plan
+PALE_RED = "#F6BDB4"  # a plan layer that differs from the request
+MONO = "Menlo"
+ARM = "q4c"           # the Qwen3-4B adapter of the result figures
 
 PT = 100 / 72  # canvas units per typographic point (one unit is 0.01 inch)
+TASKS = None   # the questions (magician/tasks.json), set in main
 
 
 def style():
@@ -82,86 +91,26 @@ def text_width(ax, text, size, bold=False):
 
 
 WEAK_ENDS = ("it", "one", "a", "the", "of", "to", "and", "on", "in", "your")
-
-
-def wrap(ax, text, size, width, bold=False):
-    """Greedy line breaks; a line never ends on a short function word, which moves to the next line."""
-    lines, line = [], ""
-    for word in text.split():
-        trial = f"{line} {word}".strip()
-        if text_width(ax, trial, size, bold) <= width or not line:
-            line = trial
-        else:
-            head, _, last = line.rpartition(" ")
-            if head and last.lower().strip(",;:") in WEAK_ENDS:
-                lines.append(head)
-                line = f"{last} {word}"
-            else:
-                lines.append(line)
-                line = word
-    return lines + [line]
-
-
-def clip_lines(lines, n):
-    """The first n lines, ending in an ellipsis after a content word when text was cut."""
-    if len(lines) <= n:
-        return lines
-    words = " ".join(lines[n - 1:]).split()[: len(lines[n - 1].split())]
-    while len(words) > 1 and words[-1].lower().strip(".,;:") in WEAK_ENDS:
-        words.pop()
-    return lines[: n - 1] + [" ".join(words).rstrip(".,;: ") + "…"]
-
-
-def bubble(ax, x, top, w, text, fill, color, size=19, tail="right", pad=22, max_lines=None, pills=True):
-    """A chat bubble whose top-left corner is (x, top); returns its bottom edge."""
-    kw = dict(max_lines=max_lines, leading=1.45, pills=pills)
-    h = 2 * pad + rich_height(text, size, w - 2 * pad, **kw)
-    rbox(ax, x, top - h, w, h, fill, radius=26, z=3)
-    side = 1 if tail == "right" else -1
-    edge = x + w if tail == "right" else x
-    tip = [(edge - side * 30, top - h), (edge + side * 12, top - h - 4), (edge - side * 4, top - h + 26)]
-    ax.add_patch(Polygon(tip, closed=True, fc=fill, ec="none", zorder=3))
-    rich(ax, x + pad, top - pad, text, size, w - 2 * pad, color=color, **kw)
-    return top - h
-
-
-def image(ax, path, cx, cy, size, z=5):
-    ax.imshow(plt.imread(path), extent=(cx - size / 2, cx + size / 2, cy - size / 2, cy + size / 2), zorder=z)
-
-
 WORD = re.compile(r"^([\"'“‘(…]*)(.*?)([\"'”’).,;:!?…]*)$")
 
 
-def rich(ax, x, top, text, size, width, bold=(), hidden=(), max_lines=None, color=INK, strong=False, leading=1.6,
-         pills=True):
-    """Text from (x, top), wrapped to width. The tokens even and odd sit on a pill of their layer colour, words in
-    `bold` are bold, and words in `hidden` are blacked out; strong makes all of the text bold; a lone | starts a new
-    line. Straight quotes become curly. Returns the bottom edge."""
+def rich(ax, x, top, text, size, width, bold=(), color=INK, leading=1.6):
+    """Text from (x, top), wrapped to width, with the words in `bold` in bold; a line never ends on a short function
+    word, which moves to the next line. Straight quotes become curly. Returns the bottom edge."""
     text = re.sub(r"(\w)'(\w)", "\\1\u2019\\2", text)
     text = re.sub(r"'(?=\w)", "\u2018", text).replace("'", "\u2019")
-    space = text_width(ax, "a a", size, strong) - text_width(ax, "aa", size, strong)
-    pad = 7
+    space = text_width(ax, "a a", size) - text_width(ax, "aa", size)
     words = []
     for w in text.split():
-        if w == "|":
-            words.append(None)
-            continue
         pre, core, post = WORD.match(w).groups()
-        key = core.lower()
-        kind = ("hidden" if key in hidden else key if pills and key in ("even", "odd") else "bold" if core in bold
-                else "plain")
-        pill = kind in ("even", "odd", "hidden")
-        cw = text_width(ax, core, size, strong or kind != "plain") + (2 * pad if pill else 0)
-        words.append((pre, core, post, kind, text_width(ax, pre, size, strong) + cw + text_width(ax, post, size, strong)))
+        b = core in bold
+        words.append((pre, core, post, b,
+                      text_width(ax, pre, size) + text_width(ax, core, size, b) + text_width(ax, post, size)))
     lines, line, used = [], [], 0
     for wd in words:
-        if wd is None:
-            lines.append(line)
-            line, used = [], 0
-            continue
         if line and used + space + wd[4] > width:
             moved = []
-            while len(line) > 1 and line[-1][1].lower() in WEAK_ENDS and line[-1][3] == "plain":
+            while len(line) > 1 and line[-1][1].lower() in WEAK_ENDS and not line[-1][3]:
                 moved.insert(0, line.pop())
             lines.append(line)
             line = moved
@@ -169,59 +118,36 @@ def rich(ax, x, top, text, size, width, bold=(), hidden=(), max_lines=None, colo
         used += (space if line else 0) + wd[4]
         line.append(wd)
     lines.append(line)
-    if max_lines and len(lines) > max_lines:
-        lines = lines[:max_lines]
-        while len(lines[-1]) > 1 and lines[-1][-1][1].lower() in WEAK_ENDS:
-            lines[-1].pop()
-        pre, core, post, kind, w = lines[-1][-1]
-        lines[-1][-1] = (pre, core, "\u2026", kind, w)
     step = size * PT * leading
     for i, ln in enumerate(lines):
         cy = top - size * PT * 0.85 - i * step
-        segs = []  # [kind, text, glued to the previous segment]
-        for pre, core, post, kind, _ in ln:
+        segs = []  # [bold, text, glued to the previous segment]
+        for pre, core, post, b, _ in ln:
             if pre:
-                segs.append(["plain", pre, False])
-            segs.append([kind, core, bool(pre)])
+                segs.append([False, pre, False])
+            segs.append([b, core, bool(pre)])
             if post:
-                segs.append(["plain", post, True])
+                segs.append([False, post, True])
         merged = []
-        for kind, t, glue in segs:
-            if merged and kind == "plain" and merged[-1][0] == "plain":
+        for b, t, glue in segs:
+            if merged and not b and not merged[-1][0]:
                 merged[-1][1] += ("" if glue else " ") + t
             else:
-                merged.append([kind, t, glue])
+                merged.append([b, t, glue])
         cx = x
-        for k, (kind, t, glue) in enumerate(merged):
+        for k, (b, t, glue) in enumerate(merged):
             if k and not glue:
                 cx += space
-            if kind in ("even", "odd", "hidden"):
-                cw = text_width(ax, t, size, True)
-                fill = {"even": PALE_EVEN, "odd": PALE_ODD, "hidden": INK}[kind]
-                tc = {"even": EVEN, "odd": ODD, "hidden": "white"}[kind]
-                rbox(ax, cx, cy - size * PT * 0.72, cw + 2 * pad, size * PT * 1.44, fill, radius=8, z=3)
-                write(ax, cx + pad, cy, t, size, True, tc, ha="left")
-                cx += cw + 2 * pad
-            else:
-                b = strong or kind == "bold"
-                write(ax, cx, cy, t, size, b, color, ha="left")
-                cx += text_width(ax, t, size, b)
+            write(ax, cx, cy, t, size, b, color, ha="left")
+            cx += text_width(ax, t, size, b)
     return top - size * PT * 0.85 - (len(lines) - 1) * step - size * PT * 0.85
 
 
-
-ACC = "#E8772E"   # the trained model's achieved change
-TGT = "#D1D1D6"   # the requested change
-ARM = "q4c"
-SET_LABELS = {
-    "seen": "Kinds of instruction seen in training",
-    "new_wording": "New wordings and verbs",
-    "new_concepts": "Concepts never trained on",
-    "new_layer_patterns": "Layer patterns never trained on",
-    "new_token_patterns": "Token patterns never trained on",
-    "three_edits": "Three edits in one instruction",
-    "all_new": "New concept, layer pattern and wording at once",
-}
+def rich_height(text, size, width, bold=(), **kw):
+    fig, ax = canvas(1240, 1000)
+    h = 1000 - rich(ax, 0, 1000, text, size, width, bold, **kw)
+    plt.close(fig)
+    return h
 
 
 def data(arm=ARM):
@@ -236,294 +162,492 @@ def instruction_only(user, task):
 
 
 def concept_words(it):
-    import sys
-    sys.path.insert(0, str(ROOT / "magician"))
-    import concepts as K
     return tuple(w for ci in it["concepts"] for w in K.NAMES[ci].split() + K.PHRASES[ci].split()
                  if w not in ("the", "color"))
 
 
-def target_strip(ax, x, y, w, h, target, achieved, lo=-3.5, hi=3.5, tick_size=16, unit=""):
-    """Requested change as wide pale bars, achieved change as narrow bars joined by a line."""
-    sy = lambda val: y + h * (np.clip(val, lo, hi) - lo) / (hi - lo)
-    for val, lab in ((2, "+2"), (-2, "−2")):
-        ax.plot([x - 4, x + w + 4], [sy(val), sy(val)], color=PALE_GRAY, lw=1.5, ls=(0, (3, 3)), zorder=2)
-        write(ax, x - 12, sy(val), lab + unit, tick_size, ha="right")
-    ax.plot([x - 4, x + w + 4], [sy(0), sy(0)], color=GRAY, lw=1.6, zorder=3)
-    n = len(target)
+# Requested and achieved changes as heatmaps: layers upward, reply tokens rightward.
+
+DIV = LinearSegmentedColormap.from_list("lowered_raised", [(0, "#0D366B"), (0.2, "#2A78D6"), (0.38, "#9EC5F4"),
+                                                           (0.5, "#EDEDEA"), (0.62, "#F7B19F"), (0.8, "#E34948"),
+                                                           (1, "#7D1717")])
+DIV.set_bad((0, 0, 0, 0))
+LIM = 3.0   # SD at either end of the colour scale
+T_SHOWN = 64
+
+
+def grid(prof, key, k=0):
+    """[T_SHOWN, L] change of the k-th requested concept; tokens after the end of the reply are NaN."""
+    a = prof[key].float().numpy()[:, :, k]
+    out = np.full((T_SHOWN, a.shape[1]), np.nan)
+    out[:min(len(a), T_SHOWN)] = a[:T_SHOWN]
+    return out
+
+
+def heat(ax, x, y, w, h, A, radius=8):
+    rbox(ax, x, y, w, h, "white", radius=radius, z=2)
+    im = ax.imshow(np.clip(A.T, -LIM, LIM), cmap=DIV, vmin=-LIM, vmax=LIM, origin="lower", interpolation="nearest",
+                   extent=(x, x + w, y, y + h), zorder=3, aspect="auto")
+    clip = FancyBboxPatch((x, y), w, h, boxstyle=f"round,pad=0,rounding_size={radius}", transform=ax.transData,
+                          facecolor="none", edgecolor="none")
+    ax.add_patch(clip)
+    im.set_clip_path(clip)
+
+
+def colour_scale(ax, cx, y, w=420, h=22, size=19):
+    """The colour scale, centred at cx: lowered on the left, raised on the right."""
+    x = cx - w / 2
+    ramp = np.linspace(-LIM, LIM, 256)[None, :]
+    im = ax.imshow(ramp, cmap=DIV, vmin=-LIM, vmax=LIM, extent=(x, x + w, y - h / 2, y + h / 2), zorder=3,
+                   aspect="auto")
+    clip = FancyBboxPatch((x, y - h / 2), w, h, boxstyle="round,pad=0,rounding_size=6", transform=ax.transData,
+                          facecolor="none", edgecolor="none")
+    ax.add_patch(clip)
+    im.set_clip_path(clip)
+    write(ax, x - 16, y, "lowered", size, True, ha="right")
+    write(ax, x + w + 16, y, "raised", size, True, ha="left")
+    for v, lab in ((-LIM, f"−{LIM:.0f} SD"), (0, "0"), (LIM, f"+{LIM:.0f} SD")):
+        write(ax, x + w * (v + LIM) / (2 * LIM), y - h / 2 - 22, lab, size - 2)
+
+
+def pick(items, ok, med=None):
+    """Index of the item, among those ok() accepts, whose pattern match r is closest to the median r of all items
+    (or to med); instructions ending in "it" or using words the figure wording rules ban are skipped."""
+    rs = [it["r"] for it in items if "r" in it]
+    med = np.median(rs) if med is None else med
+    idx = [i for i, it in enumerate(items) if "r" in it and ok(it)
+           and not re.search(r"\bit\W*$|\bit\.|\b(push|carr|keep|kept|hold|held|drift)",
+                             instruction_only(it["user"], TASKS[it["task"]]), re.I)]
+    return min(idx, key=lambda i: abs(items[i]["r"] - med)) if idx else None
+
+
+def heat_rows(ax, y, rows, columns, W, text_w=620, hw=320, gap=22, size=22, tag_size=17):
+    """One panel per row: a tag naming what is new, the instruction, and one heatmap per column and requested
+    concept. rows: (tag, item, profile); columns: (header, profile key). Returns the bottom edge."""
+    x0 = 40 + text_w + 80
+    hh = hw * 36 / 64
+    for k, (head, _) in enumerate(columns):
+        write(ax, x0 + k * (hw + gap) + hw / 2, y, head, 21, True)
+    y -= 34
+    for tag, it, prof in rows:
+        text = instruction_only(it["user"], TASKS[it["task"]])
+        bold = concept_words(it)
+        nc = len(it["concepts"])
+        sub = 26 if nc > 1 else 0
+        heat_h = nc * hh + (nc - 1) * (sub + 14)
+        th = 32 + rich_height(text, size, text_w - 20, bold=bold)
+        h = max(heat_h + 2 * 30 + sub, th + 2 * 30)
+        rbox(ax, 16, y - h, W - 32, h, PANEL, radius=22, z=1)
+        ty = y - (h - th) / 2
+        write(ax, 40, ty - 8, tag.upper(), tag_size, True, GRAY, ha="left")
+        rich(ax, 40, ty - 32, text, size, text_w - 20, bold=bold)
+        hy = y - (h - heat_h - sub) / 2
+        for c in range(nc):
+            top = hy - c * (hh + sub + 14) - sub
+            if nc > 1:
+                write(ax, x0, top + 14, K.NAMES[it["concepts"][c]], 18, True, ha="left")
+            for k, (_, key) in enumerate(columns):
+                heat(ax, x0 + k * (hw + gap), top - hh, hw, hh, grid(prof, key, c))
+            write(ax, x0 - 10, top - hh + 8, "0", 15, color=GRAY, ha="right")
+            write(ax, x0 - 10, top - 8, str(prof["target"].shape[1] - 1), 15, color=GRAY, ha="right")
+            write(ax, x0 - 44, top - hh / 2, "layer", 15, color=GRAY, rotation=90)
+        y -= h + 16
+    for k in range(len(columns)):
+        xx = x0 + k * (hw + gap)
+        write(ax, xx + 4, y - 6, "0", 15, color=GRAY, ha="left")
+        write(ax, xx + hw / 2, y - 6, "reply token", 15, color=GRAY)
+        write(ax, xx + hw - 4, y - 6, str(T_SHOWN - 1), 15, color=GRAY, ha="right")
+    return y - 30
+
+
+def hero():
+    """Typical instructions on three held-out sets (the item closest to its set's median pattern match): the requested
+    change, the trained model's change, and the original model's change, per layer and reply token."""
+    E, P = data()
+    rows = []
+    for s, tag, ok in (("new_concepts", "concept never seen in training", lambda it: it["fams"][-1] != "tok_all"),
+                       ("new_wording", "wording never seen in training", lambda it: len(it["concepts"]) == 1),
+                       ("three_edits", "three edits in one instruction", lambda it: len(it["concepts"]) == 3)):
+        items = E["sets"][s]["items"]
+        i = pick(items, ok)
+        rows.append((tag, items[i], P[s][i]))
+    W = 1800
+    fig, ax = canvas(W, 4000)
+    y = 3960
+    write(ax, 24, y - 24, "Requested and achieved changes in Qwen3-4B", 32, True, ha="left")
+    y = heat_rows(ax, y - 100, rows, (("requested", "target"), ("trained model", "dz"), ("original model", "orig_dz")),
+                  W)
+    colour_scale(ax, 40 + 620 + 80 + (3 * 320 + 2 * 22) / 2, y - 30)
+    crop(fig, ax, y - 100, 4000)
+    save(fig, "hero")
+
+
+def fails():
+    """Patterns over layers and reply tokens never seen in training: for each rule, the instruction whose pattern
+    match r is closest to the median of that rule's instructions."""
+    E, P = data()
+    rows = []
+    for s, fam, tag in (("new_layer_patterns", "prime", "prime-numbered layers"),
+                        ("new_layer_patterns", "power2", "layers that are powers of two"),
+                        ("new_token_patterns", "tok_alternate", "alternating reply tokens"),
+                        ("new_token_patterns", "tok_fade", "a change that fades over the reply")):
+        items = E["sets"][s]["items"]
+        ok = lambda it: fam in it["fams"] and len(it["concepts"]) == 1 and len(it["fams"]) == 2
+        med = np.median([it["r"] for it in items if "r" in it and ok(it)])
+        i = pick(items, ok, med)
+        rows.append((tag, items[i], P[s][i]))
+    W, tw, hw = 1800, 620, 480
+    fig, ax = canvas(W, 4000)
+    y = 3960
+    write(ax, 24, y - 24, "Patterns never seen in training", 32, True, ha="left")
+    y = heat_rows(ax, y - 100, rows, (("requested", "target"), ("trained model", "dz")), W, text_w=tw, hw=hw)
+    colour_scale(ax, 40 + tw + 80 + (2 * hw + 22) / 2, y - 30)
+    crop(fig, ax, y - 100, 4000)
+    save(fig, "fails")
+
+
+# Plans: the plan the trained model writes, the plan the original model writes, and what the trained model does.
+
+
+def mono_width(ax, size):
+    a = ax.text(0, 0, "0" * 20, fontsize=size, family=MONO)
+    w = a.get_window_extent(ax.figure.canvas.get_renderer()).width / ax.figure.dpi * 100 / 20
+    a.remove()
+    return w
+
+
+def plan_text(ax, x, top, text, size, width, wrong):
+    """The plan as written, in a monospaced font wrapped to width; layer numbers in `wrong` are red and bold.
+    Returns the bottom edge."""
+    cw = mono_width(ax, size)
+    per = max(int(width // cw), 10)
+    step = size * PT * 1.5
+    y = top - size * PT * 0.8
+    for raw in text.strip().split("\n"):
+        words, n, in_layers = [], 0, False
+        for wd in raw.split(" "):   # a list written without spaces breaks after its commas
+            while len(wd) > per:
+                cut = wd.rfind(",", 0, per) + 1 or per
+                words.append(wd[:cut])
+                wd = wd[cut:]
+            words.append(wd)
+        rows = [[]]
+        for wd in words:
+            if n and n + 1 + len(wd) > per:
+                rows.append([])
+                n = 0
+            rows[-1].append(wd)
+            n += len(wd) + (1 if n else 0)
+        for row in rows:
+            cx = x
+            for k, wd in enumerate(row):
+                if k:
+                    cx += cw
+                for part in re.findall(r"\d+|[^\d]+", wd):   # digits and the text between them
+                    red = in_layers and part.isdigit() and int(part) in wrong
+                    ax.text(cx, y, part, fontsize=size, family=MONO, color=RED if red else INK,
+                            weight="bold" if red else "normal", ha="left", va="center", zorder=6)
+                    cx += cw * len(part)
+                if wd == "layers":
+                    in_layers = True
+                if wd.endswith(";"):
+                    in_layers = False
+            y -= step
+    return y + step - size * PT * 0.8
+
+
+def layer_bars(ax, x, y, w, h, lo, hi, bars, bar_cols, achieved=None, size_line=None):
+    """Per-layer bars (wide, pale) and the achieved change (narrow, orange)."""
+    sy = lambda v: y + h * (np.clip(v, lo, hi) - lo) / (hi - lo)
+    n = len(bars)
     step = w / n
+    if size_line is not None:
+        ax.plot([x, x + w], [sy(size_line)] * 2, color=PALE_GRAY, lw=1.2, zorder=2)
+        write(ax, x - 12, sy(size_line), f"{size_line:+.0f} SD".replace("-", "−"), 15, color=GRAY, ha="right")
+    ax.plot([x, x + w], [sy(0)] * 2, color=GRAY, lw=1.4, zorder=3)
+    write(ax, x - 12, sy(0), "0", 15, color=GRAY, ha="right")
     for i in range(n):
         cx = x + (i + 0.5) * step
-        ax.add_patch(Rectangle((cx - step * 0.42, min(sy(0), sy(target[i]))), step * 0.84, abs(sy(target[i]) - sy(0)),
-                               fc=TGT, ec="none", zorder=4))
-        ax.add_patch(Rectangle((cx - step * 0.2, min(sy(0), sy(achieved[i]))), step * 0.4,
-                               abs(sy(achieved[i]) - sy(0)), fc=ACC, ec="none", zorder=5))
-    xs = x + (np.arange(n) + 0.5) * step
-    ax.plot(xs, sy(np.asarray(achieved)), color=INK, lw=max(1.4, h / 90), zorder=6, solid_joinstyle="round")
-    ax.scatter(xs, sy(np.asarray(achieved)), s=max(6, h / 12), color=INK, zorder=7, linewidths=0)
+        if abs(bars[i]) > 1e-6:
+            ax.add_patch(Rectangle((cx - step * 0.42, min(sy(0), sy(bars[i]))), step * 0.84, abs(sy(bars[i]) - sy(0)),
+                                   fc=bar_cols[i], ec="none", zorder=4))
+        if achieved is not None:
+            ax.add_patch(Rectangle((cx - step * 0.22, min(sy(0), sy(achieved[i]))), step * 0.44,
+                                   abs(sy(achieved[i]) - sy(0)), fc=ACC, ec="none", zorder=5))
 
 
-def legend_target(ax, cx, y, size=20, entries=(("requested", TGT), ("trained model", ACC))):
-    x = cx - 220
-    for lab, col in entries:
-        sq = 1.3 * size
-        ax.add_patch(Rectangle((x, y - sq / 2), sq, sq, fc=col, ec="none"))
-        write(ax, x + sq + 10, y, lab, size, True, INK if col in (TGT, GRAY) else col, ha="left")
-        x += sq + 10 + text_width(ax, lab, size, True) + 1.6 * size
+def plan():
+    """Two held-out layer-pattern instructions followed by the 1.7B model trained on plans alone (r17): the request,
+    the plan it writes and what it does, and the plan the original model writes after thinking and what the trained
+    model does with that plan (results/plan_examples_r17.pt, from magician/examples.py)."""
+    import torch
+    recs = {r["idx"]: r for r in torch.load(RES / "plan_examples_r17.pt", weights_only=False)}
+    W = 1860
+    fig, ax = canvas(W, 5000)
+    y = 4960
+    write(ax, 24, y - 24, "Plans for layer patterns never seen in training", 32, True, ha="left")
+    y -= 90
+    tx, tw = 40, 720
+    x0, x1 = 880, 1620
+    xr = W - 24 - text_width(ax, "pattern match r", 20, True) / 2
+    write(ax, (x0 + x1) / 2, y, "change per layer, averaged over reply tokens", 20, True)
+    write(ax, xr, y, "pattern match r", 20, True)
+    y -= 40
+    for idx in (94, 66):
+        rec = recs[idx]
+        L = rec["own"]["target"].shape[1]
+        tgt = rec["own"]["target"].float().numpy()[:, :, 0].mean(0)
+        name = rec["own_plan"].split(":")[0]
+        text = instruction_only(rec["user"], TASKS[rec["task"]])
+        bold = tuple(w + e for w in name.split() if w != "the" for e in ("", "s", "es"))
+        th = rich_height(text, 23, W - 120, bold=bold)
+        h = th + 64
+        rbox(ax, 16, y - h, W - 32, h, PANEL, radius=22, z=1)
+        write(ax, 40, y - 26, "INSTRUCTION", 17, True, GRAY, ha="left")
+        rich(ax, 40, y - 46, text, 23, W - 120, bold=bold)
+        y -= h + 30
+        vals = [tgt]
+        rows = []
+        for key, lab, col in (("own", "plan the trained model writes", ACC),
+                              ("orig", "plan the original model writes after thinking", PLANNER)):
+            ptxt = rec[f"{key}_plan"]
+            got = spec.parse_plan(ptxt, L)
+            pv = got[name].mean(1) if name in got else np.zeros(L)
+            ach = rec[key]["dz"].float().numpy()[:, :, 0].mean(0)
+            wrong = {i for i in range(L) if abs(pv[i] - tgt[i]) > 0.06}
+            rows.append((lab, col, ptxt, pv, ach, wrong, rec[key]["r"]))
+            vals += [pv, ach]
+        lo = min(min(v.min() for v in vals) - 0.4, -1.0)
+        hi = max(max(v.max() for v in vals) + 0.4, 1.0)
+        size_line = float(tgt[np.argmax(np.abs(tgt))])
+        ch = 130
+        # requested
+        write(ax, tx, y - ch / 2, "requested", 21, True, ha="left")
+        layer_bars(ax, x0, y - ch, x1 - x0, ch, lo, hi, tgt, [TGT] * L, size_line=size_line)
+        y -= ch + 34
+        for lab, col, ptxt, pv, ach, wrong, r in rows:
+            ax.scatter([tx + 9], [y - 14], s=200, color=col, linewidths=0, zorder=6)
+            write(ax, tx + 28, y - 14, lab, 21, True, ha="left")
+            bottom = plan_text(ax, tx, y - 40, ptxt, 17, tw, wrong)
+            rh = max(ch, y - bottom + 10)
+            cy = y - rh / 2 - 10
+            cols = [PALE_RED if i in wrong else TGT for i in range(L)]
+            layer_bars(ax, x0, cy - ch / 2, x1 - x0, ch, lo, hi, pv, cols, achieved=ach, size_line=size_line)
+            write(ax, xr, cy, f"{r:.2f}".replace("-", "−"), 26, True)
+            y -= rh + 34
+        write(ax, x0 + (x1 - x0) / (2 * L), y + 12, "0", 15, color=GRAY)
+        write(ax, x1 - (x1 - x0) / (2 * L), y + 12, str(L - 1), 15, color=GRAY)
+        write(ax, (x0 + x1) / 2, y + 12, "layer", 15, color=GRAY)
+        y -= 50
+    x = 40
+    for lab, kind, col in (("plan layer that matches the request", "bar", TGT),
+                           ("plan layer that differs from the request", "bar", PALE_RED),
+                           ("change the trained model makes", "bar", ACC)):
+        ax.add_patch(Rectangle((x, y - 13), 26, 26, fc=col, ec="none"))
+        write(ax, x + 36, y, lab, 19, True, ha="left")
+        x += 36 + text_width(ax, lab, 19, True) + 56
+    crop(fig, ax, y - 40, 5000)
+    save(fig, "plan")
 
 
-def axis_labels(ax, x, y, w, n, name, size=16):
-    step = w / n
-    write(ax, x + step / 2, y, "0", size)
-    write(ax, x + w - step / 2, y, str(n - 1), size)
-    write(ax, x + w / 2, y, name, size)
-
-
-def typical(items, profs, pred):
-    """Index of the item whose share of the requested change is closest to the median of the items pred selects (an
-    instruction ending in "it" breaks the figure wording rule, so those are not shown)."""
-    idx = [i for i, it in enumerate(items) if pred(it) and "frac" in it
-           and not re.search(r"\bit\W*$|\bit\.", instruction_only(it["user"], TASKS[it["task"]]))]
-    if not idx:
-        return None
-    med = np.median([items[i]["frac"] for i in idx])
-    return min(idx, key=lambda i: abs(items[i]["frac"] - med))
-
-
-def cards(name, picks, header, profile, n_axis, axis_name, width=1240, label_w=540, strip_h=150, size=21):
-    """One card per pick: the instruction on the left, the requested and achieved change on the right."""
-    fig, ax = canvas(width, 4000)
-    y = 3960
-    if header:
-        write(ax, 20, y - 24, header, 30, True, ha="left")
-        y -= 80
-    x0 = 20 + label_w + 110
-    sw = width - x0 - 30
-    for it, prof in picks:
-        text = instruction_only(it["user"], TASKS[it["task"]])
-        th = rich_height(text, size, label_w - 40, bold=concept_words(it))
-        h = max(strip_h + 50, th + 50)
-        rbox(ax, 10, y - h, width - 20, h, PANEL, radius=22, z=1)
-        rich(ax, 34, y - (h - th) / 2, text, size, label_w - 40, bold=concept_words(it))
-        tgt, ach = profile(prof)
-        target_strip(ax, x0, y - h / 2 - strip_h / 2, sw, strip_h, tgt, ach, unit=" SD")
-        y -= h + 18
-    axis_labels(ax, x0, y - 10, sw, n_axis, axis_name)
-    legend_target(ax, width / 2 + 60, y - 70)
-    crop(fig, ax, y - 110, 3960 if not header else 4000)
-    save(fig, name)
-
-
-def rich_height(text, size, width, bold=(), **kw):
-    fig, ax = canvas(1240, 1000)
-    h = 1000 - rich(ax, 0, 1000, text, size, width, bold, **kw)
-    plt.close(fig)
-    return h
-
-
-def over_tokens(prof):
-    """Mean over reply tokens, per layer, of the first requested concept."""
-    t, d = prof["target"].float().numpy()[:, :, 0], prof["dz"].float().numpy()[:, :, 0]
-    return t.mean(0), d.mean(0)
-
-
-def over_layers(prof):
-    """Per reply token, mean over the layers the instruction targets."""
-    t, d = prof["target"].float().numpy()[:, :, 0], prof["dz"].float().numpy()[:, :, 0]
-    on = np.abs(t).sum(0) > 0
-    return t[:, on].mean(1), d[:, on].mean(1)
-
-
-def magic():
-    """Typical results on instructions about concepts never seen in training."""
-    E, P = data()
-    items, profs = E["sets"]["new_concepts"]["items"], P["new_concepts"]
-    picks, used = [], set()
-    for fam in ("bump", "ramp_up", "range", "half", "last", "first"):
-        i = typical(items, profs, lambda it: fam in it["fams"] and "tok_all" in it["fams"] and len(it["concepts"]) == 1
-                    and id(it) not in used)
-        if i is not None:
-            used.add(id(items[i]))
-            picks.append((items[i], profs[i]))
-    cards("magic", picks, "Concepts never seen in training", over_tokens,
-          len(over_tokens(picks[0][1])[0]), "layer")
-
-
-def tokens():
-    """Typical results on reply-token patterns never seen in training."""
-    E, P = data()
-    items, profs = E["sets"]["new_token_patterns"]["items"], P["new_token_patterns"]
-    picks = []
-    for fam in ("tok_alternate", "tok_fade", "tok_between"):
-        i = typical(items, profs, lambda it: fam in it["fams"] and len(it["concepts"]) == 1 and len(it["fams"]) == 2)
-        if i is not None:
-            picks.append((items[i], profs[i]))
-    T = len(over_layers(picks[0][1])[0])
-    cards("tokens", picks, "Patterns over reply tokens never seen in training", over_layers, T, "reply token")
+SCORE_ROWS = (("seen", "Kinds of instruction seen in training"), ("new_wording", "Wordings never seen in training"),
+              ("new_concepts", "Concepts never seen in training"), ("three_edits", "Three edits in one instruction"),
+              ("new_token_patterns", "Token patterns never seen in training"),
+              ("new_layer_patterns", "Layer patterns never seen in training"),
+              ("all_new", "New concept, layer pattern and wording at once"))
 
 
 def scores():
-    """Share of the requested change the trained model makes on each held-out set, against the original model."""
+    """Each held-out set: the share of the requested change and the pattern match r, original model to trained model
+    (mean and 95% bootstrap interval over 96 instructions)."""
     E, _ = data()
-    width = 1240
-    fig, ax = canvas(width, 2000)
+    W = 1800
+    fig, ax = canvas(W, 2000)
     y = 1960
-    write(ax, 20, y - 20, "Share of the requested change", 30, True, ha="left")
-    y -= 90
-    x0, x1 = 600, 960
-    sx = lambda v: x0 + (x1 - x0) * np.clip(v, 0, 1)
-    write(ax, 1220, y + 20, "pattern match r", 20, True, ha="right")
-    for key, label in SET_LABELS.items():
+    write(ax, 24, y - 24, "Qwen3-4B on instructions not used in training", 32, True, ha="left")
+    y -= 100
+    pct = lambda v: f"{100 * v:.0f}%"
+    num = lambda v: f"{v:.2f}".replace("-", "−")
+    panels = (("frac", "share of the requested change", 800, 1250, 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")),
+               pct),
+              ("r", "pattern match r", 1370, 1730, -0.2, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), num))
+    for _, head, a, b, *_ in panels:
+        write(ax, (a + b) / 2, y, head, 21, True)
+    y -= 56
+    top = y + 26
+    for n, (key, label) in enumerate(SCORE_ROWS):
+        if key == "new_token_patterns":
+            y -= 26
         S = E["sets"][key]["summary"]
-        rich(ax, 20, y - 6, label, 22, x0 - 60)
-        for k, (who, col, val) in enumerate((("trained", ACC, S["frac"]), ("original", GRAY, S["orig"]["frac"]))):
-            cy = y - 22 - k * 40
-            rbox(ax, x0, cy - 15, x1 - x0, 30, PANEL, radius=8, z=1)
-            m, lo, hi = val[:3]
-            if m > 0.005:
-                rbox(ax, x0, cy - 15, sx(m) - x0, 30, col, radius=8, z=2)
-            ax.plot([sx(lo), sx(hi)], [cy, cy], color=INK, lw=2, zorder=4)
-            write(ax, max(sx(hi), sx(m)) + 14, cy, f"{max(100 * m, 0):.0f}%" if m > -0.005 else f"{100 * m:.0f}%",
-                  20, True, ha="left")
-        r = S["r"][0]
-        write(ax, 1220, y - 22, f"{r:+.2f}", 22, True, RED if r < 0.2 else INK, ha="right")
-        y -= 120
-    legend_target(ax, width / 2 + 60, y - 10, entries=(("trained model", ACC), ("original model", GRAY)))
-    crop(fig, ax, y - 50, 2000)
+        write(ax, 24, y, label, 22, ha="left")
+        for k, head, a, b, lo, hi, ticks, fmt in panels:
+            sx = lambda v: a + (b - a) * (np.clip(v, lo, hi) - lo) / (hi - lo)
+            m, cl, ch = S[k][:3]
+            o = S["orig"][k][0]
+            ax.plot([sx(o), sx(m)], [y, y], color=PALE_GRAY, lw=3, zorder=2, solid_capstyle="round")
+            ax.plot([sx(cl), sx(ch)], [y, y], color=ACC, lw=12, alpha=0.3, zorder=3, solid_capstyle="round")
+            ax.scatter([sx(o)], [y], s=200, color=GRAY, zorder=4, linewidths=2, edgecolors="white")
+            ax.scatter([sx(m)], [y], s=300, color=ACC, zorder=5, linewidths=2, edgecolors="white")
+            if m >= o:
+                write(ax, max(sx(ch), sx(m)) + 16, y, fmt(m), 20, True, ha="left")
+            else:
+                write(ax, min(sx(cl), sx(m)) - 16, y, fmt(m), 20, True, ha="right")
+        y -= 70
+    for k, head, a, b, lo, hi, ticks, fmt in panels:
+        sx = lambda v: a + (b - a) * (np.clip(v, lo, hi) - lo) / (hi - lo)
+        for v, lab in ticks:
+            ax.plot([sx(v)] * 2, [y + 40, top], color=GRID, lw=1.2, zorder=1)
+            write(ax, sx(v), y + 14, lab, 17, color=GRAY)
+    y -= 50
+    x = 24
+    for lab, col, s in (("trained model", ACC, 300), ("original model", GRAY, 200)):
+        ax.scatter([x + 10], [y], s=s, color=col, linewidths=0)
+        write(ax, x + 30, y, lab, 20, True, ha="left")
+        x += 30 + text_width(ax, lab, 20, True) + 60
+    ax.plot([x, x + 40], [y, y], color=ACC, lw=12, alpha=0.3, solid_capstyle="round")
+    write(ax, x + 56, y, "95% interval", 20, True, ha="left")
+    crop(fig, ax, y - 40, 2000)
     save(fig, "scores")
 
 
-PLAN_ARMS = (("n17", "1.7B, no plan"), ("p17", "1.7B, plan"), ("r17", "1.7B, plan, also trained on plan alone"),
-             ("p4", "4B, plan"), ("r4", "4B, plan, also trained on plan alone"))
-GIVEN = "#1D1D1F"
-BASE = USER   # plans written by the original model (planner.py)
+PLAN_GROUPS = (("Qwen3-1.7B", (("n17", "no plan"), ("p17", "plan"), ("r17", "plan, also trained on plan alone"))),
+               ("Qwen3-4B", (("p4", "plan"), ("r4", "plan, also trained on plan alone"))))
 
 
-def base_plan(k):
-    """Summary of the held-out layer patterns carried out from the plans the original model writes after thinking
-    (eval_<arm>think.json: evaluate.py --plan_think 1024)."""
-    for f in (f"eval_{k}think.json",):
-        if (RES / f).exists():
-            bp = load(f)["sets"]["new_layer_patterns"].get("base_plan")
-            if bp:
-                return bp["summary"]
+def base_plan(k, key="new_layer_patterns"):
+    """Summary of a set followed from the plans the original model writes after thinking (eval_<arm>think.json:
+    evaluate.py --plan_think 1024)."""
+    f = RES / f"eval_{k}think.json"
+    if f.exists():
+        bp = load(f.name)["sets"][key].get("base_plan")
+        return bp and bp["summary"]
+
+
+def dot_legend(ax, x, y, entries, width, size=20):
+    """Dots, diamonds or a tick with labels in ink, wrapping to a new line at width; returns the last line's y."""
+    for lab, col, kind in entries:
+        w = 30 + text_width(ax, lab, size, True)
+        if x + w > width - 20:
+            x, y = 24, y - 46
+        if kind in ("dot", "diamond"):
+            ax.scatter([x + 10], [y], s=260 if kind == "dot" else 170, color=col, linewidths=0,
+                       marker="o" if kind == "dot" else "D")
+        else:
+            ax.plot([x + 10, x + 10], [y - 16, y + 16], color=col, lw=3)
+        write(ax, x + 30, y, lab, size, True, ha="left")
+        x += w + 56
+    return y
 
 
 def plans():
-    """Layer patterns never trained on: how often a plan is exactly right, and how well the achieved change follows the
-    requested pattern with the plan the trained model writes, the plan the original model writes, and the exact plan."""
-    arms = [(k, lab, load(f"eval_{k}.json")) for k, lab in PLAN_ARMS if (RES / f"eval_{k}.json").exists()]
-    width = 1500
-    fig, ax = canvas(width, 2000)
-    y = 1960
-    write(ax, 20, y - 20, "Layer patterns never trained on", 30, True, ha="left")
-    y -= 80
-    xp, x0, x1, lo, hi = 700, 880, 1460, -0.1, 0.8
+    """Layer patterns never trained on: how often a plan is exactly right, and the pattern match r with the plan the
+    trained model writes, the plan the original model writes after thinking, and the exact plan."""
+    W = 1800
+    fig, ax = canvas(W, 2400)
+    y = 2360
+    write(ax, 24, y - 24, "Layer patterns never seen in training", 32, True, ha="left")
+    y -= 100
+    xp, x0, x1, lo, hi = 830, 1000, 1740, -0.1, 0.8
     sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
-    write(ax, xp, y, "plan exactly right", 20, True)
-    write(ax, (x0 + x1) / 2, y, "pattern match r", 20, True)
-    y -= 50
-    top = y + 20
-    for k, lab, E in arms:
-        S = E["sets"]["new_layer_patterns"]
-        bp = base_plan(k)
-        write(ax, 20, y, lab, 22, ha="left")
-        pe = S["summary"].get("plan_exact")
-        if pe and bp:
-            write(ax, xp - 10, y, f"{100 * pe[0]:.0f}%", 22, True, ACC, ha="right")
-            write(ax, xp + 10, y, f"{100 * bp['plan_exact'][0]:.0f}%", 22, True, BASE, ha="left")
-        else:
-            write(ax, xp, y, f"{100 * pe[0]:.0f}%" if pe else "–", 22, True, ACC if pe else INK)
-        own = S["summary"]["r"][0]
-        seen = E["sets"]["seen"]["summary"]["r"][0]
-        ax.plot([sx(seen)] * 2, [y - 16, y + 16], color=GRAY, lw=3, zorder=3)
-        pts = [own] + ([S["forced"]["summary"]["r"][0]] if "forced" in S else []) + ([bp["r"][0]] if bp else [])
-        ax.plot([sx(min(pts)), sx(max(pts))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
-        if "forced" in S:
-            ax.scatter([sx(S["forced"]["summary"]["r"][0])], [y], s=260, color=GIVEN, zorder=5, linewidths=0)
-        if bp:
-            ax.scatter([sx(bp["r"][0])], [y], s=260, color=BASE, zorder=5, linewidths=0)
-        ax.scatter([sx(own)], [y], s=260, color=ACC, zorder=6, linewidths=0)
-        y -= 64
+    write(ax, xp, y, "plan exactly right", 21, True)
+    write(ax, (x0 + x1) / 2, y, "pattern match r", 21, True)
+    y -= 40
+    top = y
+    for group, arms in PLAN_GROUPS:
+        y -= 26
+        write(ax, 24, y, group.upper(), 17, True, GRAY, ha="left")
+        y -= 46
+        for k, lab in arms:
+            if not (RES / f"eval_{k}.json").exists():
+                continue
+            S = load(f"eval_{k}.json")["sets"]["new_layer_patterns"]
+            bp = base_plan(k)
+            write(ax, 24, y, lab, 22, ha="left")
+            pe = S["summary"].get("plan_exact")
+            if pe:
+                for dx, col, v in ((-120, ACC, pe[0]), (20, PLANNER, bp and bp["plan_exact"][0])):
+                    if v is None:
+                        continue
+                    ax.scatter([xp + dx], [y], s=150, color=col, linewidths=0)
+                    write(ax, xp + dx + 18, y, f"{100 * v:.0f}%", 22, True, ha="left")
+            else:
+                write(ax, xp, y, "–", 22, True)
+            seen = load(f"eval_{k}.json")["sets"]["seen"]["summary"]["r"][0]
+            ax.plot([sx(seen)] * 2, [y - 18, y + 18], color=GRAY, lw=3, zorder=3)
+            own = S["summary"]["r"][0]
+            pts = [(own, ACC, 7)]
+            if "forced" in S:
+                pts.append((S["forced"]["summary"]["r"][0], GIVEN, 8))
+            if bp:
+                pts.append((bp["r"][0], PLANNER, 6))
+            vs = [p[0] for p in pts]
+            ax.plot([sx(min(vs)), sx(max(vs))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
+            for v, col, z in pts:
+                ax.scatter([sx(v)], [y], s=300 if col != GIVEN else 190, color=col, zorder=z, linewidths=2,
+                           edgecolors="white", marker="o" if col != GIVEN else "D")
+            y -= 66
     for v in (0, 0.4, 0.8):
-        ax.plot([sx(v)] * 2, [y + 30, top], color=PALE_GRAY, lw=1.2, ls=(0, (3, 3)), zorder=1)
-        write(ax, sx(v), y + 6, f"{v:.1f}", 18)
-    y -= 50
-    x = 20
-    for lab, col, kind in (("plan the trained model writes, or no plan", ACC, "dot"),
-                           ("plan the original model writes after thinking", BASE, "dot"), ("exact plan", GIVEN, "dot"),
-                           ("patterns seen in training", GRAY, "tick")):
-        w = 22 + text_width(ax, lab, 20, True)
-        if x + w > width - 20:
-            x, y = 20, y - 44
-        if kind == "dot":
-            ax.scatter([x], [y], s=260, color=col, linewidths=0)
-        else:
-            ax.plot([x, x], [y - 16, y + 16], color=col, lw=3)
-        write(ax, x + 22, y, lab, 20, True, col if col != GIVEN else INK, ha="left")
-        x += w + 60
-    crop(fig, ax, y - 40, 2000)
+        ax.plot([sx(v)] * 2, [y + 36, top], color=GRID, lw=1.2, zorder=1)
+        write(ax, sx(v), y + 12, f"{v:g}", 17, color=GRAY)
+    y = dot_legend(ax, 24, y - 50, (("plan the trained model writes", ACC, "dot"),
+                                    ("plan the original model writes after thinking", PLANNER, "dot"),
+                                    ("exact plan", GIVEN, "diamond"), ("patterns seen in training", GRAY, "tick")), W)
+    crop(fig, ax, y - 40, 2400)
     save(fig, "plans")
 
 
-RULES = (("every45", "every 4th or 5th layer"), ("power2", "powers of two"), ("prime", "prime layers"),
+RULES = (("every45", "every 4th or 5th layer"), ("power2", "powers of two"), ("prime", "prime-numbered layers"),
          ("square", "perfect squares"), ("except", "every layer except"), ("vshape", "V shape"), ("wave", "wave"))
 
 
 def rules(arm="r17", planner_arm="r17think"):
-    """Layer patterns never trained on, by rule: pattern match r with the plan the trained model writes, the plan the
-    original model writes, and the exact plan, and how often each written plan is exactly right."""
+    """Layer patterns never trained on, by rule (the first layer pattern of each instruction): how often each plan is
+    exactly right, and the pattern match r with the plan the trained model writes, the plan the original model writes
+    after thinking, and the exact plan."""
     S = load(f"eval_{arm}.json")["sets"]["new_layer_patterns"]
-    B = load(f"eval_{planner_arm}.json")["sets"]["new_layer_patterns"]["base_plan"]["items"] \
-        if (RES / f"eval_{planner_arm}.json").exists() else S["base_plan"]["items"]
+    B = load(f"eval_{planner_arm}.json")["sets"]["new_layer_patterns"]["base_plan"]["items"]
     own, given = S["items"], S["forced"]["items"]
-    width = 1500
-    fig, ax = canvas(width, 2000)
-    y = 1960
-    write(ax, 20, y - 20, "Layer patterns never trained on, by rule", 30, True, ha="left")
-    y -= 80
-    xp, x0, x1, lo, hi = 470, 700, 1460, -0.2, 1.0
+    W = 1800
+    fig, ax = canvas(W, 2400)
+    y = 2360
+    write(ax, 24, y - 24, "Layer patterns never seen in training, by rule (Qwen3-1.7B)", 32, True, ha="left")
+    y -= 100
+    xp, x0, x1, lo, hi = 640, 820, 1740, -0.3, 0.8
     sx = lambda v: x0 + (x1 - x0) * (np.clip(v, lo, hi) - lo) / (hi - lo)
-    write(ax, xp, y, "plan exactly right", 20, True)
-    write(ax, (x0 + x1) / 2, y, "pattern match r", 20, True)
-    y -= 50
-    top = y + 20
+    write(ax, xp, y, "plan exactly right", 21, True)
+    write(ax, (x0 + x1) / 2, y, "pattern match r", 21, True)
+    y -= 66
+    top = y + 30
     for fam, lab in RULES:
         J = [j for j, it in enumerate(own) if it["fams"][0] == fam]
         if not J:
             continue
         m = lambda items, k: float(np.mean([items[j].get(k, 0.0) for j in J]))
-        write(ax, 20, y, lab, 22, ha="left")
-        write(ax, xp - 10, y, f"{100 * m(own, 'plan_exact'):.0f}%", 22, True, ACC, ha="right")
-        write(ax, xp + 10, y, f"{100 * m(B, 'plan_exact'):.0f}%", 22, True, BASE, ha="left")
-        pts = [m(own, "r"), m(B, "r"), m(given, "r")]
-        ax.plot([sx(min(pts)), sx(max(pts))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
-        for v, col, z in zip(pts, (ACC, BASE, GIVEN), (6, 5, 4)):
-            ax.scatter([sx(v)], [y], s=260, color=col, zorder=z, linewidths=0)
-        y -= 64
-    for v in (0, 0.5, 1.0):
-        ax.plot([sx(v)] * 2, [y + 30, top], color=PALE_GRAY, lw=1.2, ls=(0, (3, 3)), zorder=1)
-        write(ax, sx(v), y + 6, f"{v:.1f}", 18)
-    y -= 50
-    x = 20
-    for lab, col in (("plan the trained model writes", ACC), ("plan the original model writes after thinking", BASE),
-                     ("exact plan", GIVEN)):
-        w = 22 + text_width(ax, lab, 20, True)
-        if x + w > width - 20:
-            x, y = 20, y - 44
-        ax.scatter([x], [y], s=260, color=col, linewidths=0)
-        write(ax, x + 22, y, lab, 20, True, col if col != GIVEN else INK, ha="left")
-        x += w + 60
-    crop(fig, ax, y - 40, 2000)
+        write(ax, 24, y, lab, 22, ha="left")
+        for dx, col, v in ((-120, ACC, m(own, "plan_exact")), (20, PLANNER, m(B, "plan_exact"))):
+            ax.scatter([xp + dx], [y], s=150, color=col, linewidths=0)
+            write(ax, xp + dx + 18, y, f"{100 * v:.0f}%", 22, True, ha="left")
+        pts = [(m(own, "r"), ACC, 7), (m(B, "r"), PLANNER, 6), (m(given, "r"), GIVEN, 8)]
+        vs = [p[0] for p in pts]
+        ax.plot([sx(min(vs)), sx(max(vs))], [y, y], color=PALE_GRAY, lw=4, zorder=2, solid_capstyle="round")
+        for v, col, z in pts:
+            ax.scatter([sx(v)], [y], s=300 if col != GIVEN else 190, color=col, zorder=z, linewidths=2,
+                       edgecolors="white", marker="o" if col != GIVEN else "D")
+        y -= 66
+    for v in (0, 0.4, 0.8):
+        ax.plot([sx(v)] * 2, [y + 36, top], color=GRID, lw=1.2, zorder=1)
+        write(ax, sx(v), y + 12, f"{v:g}", 17, color=GRAY)
+    y = dot_legend(ax, 24, y - 50, (("plan the trained model writes", ACC, "dot"),
+                                    ("plan the original model writes after thinking", PLANNER, "dot"),
+                                    ("exact plan", GIVEN, "diamond")), W)
+    crop(fig, ax, y - 40, 2400)
     save(fig, "rules")
 
 
-TASKS = None
+FIGURES = ("hero", "scores", "fails", "plan", "plans", "rules")
 
 if __name__ == "__main__":
-    import sys
-
     style()
     TASKS = json.loads((ROOT / "magician" / "tasks.json").read_text())
-    for n in sys.argv[1:] or ["magic", "tokens", "scores"]:
+    for n in sys.argv[1:] or FIGURES:
         globals()[n]()
