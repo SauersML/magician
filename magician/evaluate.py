@@ -22,7 +22,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--adapter', required=True)
 ap.add_argument('--name', required=True)
 ap.add_argument('--n', type=int, default=96)
-ap.add_argument('--gen_n', type=int, default=24)
+ap.add_argument('--gen_n', type=int, default=24, help='questions per set for the answer check (0: none)')
+ap.add_argument('--sets', default=','.join(spec.EVAL_SETS), help='comma-separated eval sets')
 ap.add_argument('--base_plan_sets', default='new_layer_patterns,all_new',
                 help='with plans: sets also scored with plans the original model writes (planner.py)')
 args = ap.parse_args()
@@ -41,7 +42,7 @@ os.makedirs(odir, exist_ok=True)
 out = {'adapter': args.adapter, 'model': C.MODEL, 'sets': {}}
 profiles = {}
 planner = None
-for name in spec.EVAL_SETS:
+for name in args.sets.split(','):
     exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.n)
     items = measure.score(lm, model, tok, res, prep, exs, replies, orig=True, keep_profiles=True)
     profiles[name] = [{k: it.pop(k) for k in ('dz', 'target', 'orig_dz') if k in it} for it in items]
@@ -84,7 +85,7 @@ torch.save(profiles, os.path.join(odir, 'profiles.pt'))
 META = re.compile(r'\b(layers?|activations?|representations?|residual|neurons?)\b', re.I)
 gen = []
 tok.padding_side = 'left'
-for name in ('seen', 'new_concepts', 'all_new'):
+for name in ('seen', 'new_concepts', 'all_new') if args.gen_n else ():
     exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.gen_n)
     users = [ex['user'] for ex in exs]
     with torch.no_grad():
