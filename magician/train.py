@@ -33,6 +33,8 @@ ap.add_argument('--lam', type=float, default=3.0)
 ap.add_argument('--lam_ramp', type=int, default=200)
 ap.add_argument('--beta', type=float, default=1.0)
 ap.add_argument('--eval_every', type=int, default=250)
+ap.add_argument('--eval_first', type=int, default=1, help='0: no eval at step 0 (with plans, a fresh adapter '
+                'never closes its thinking block, so the step 0 eval only takes time)')
 ap.add_argument('--save_every', type=int, default=1000)
 ap.add_argument('--eval_n', type=int, default=24)
 ap.add_argument('--init', default='')
@@ -97,7 +99,7 @@ log = []
 t0 = time.time()
 model.train()
 for step in range(args.steps + 1):
-    if step % args.eval_every == 0 or step == args.steps:
+    if (step % args.eval_every == 0 and (step > 0 or args.eval_first)) or step == args.steps:
         log.append(evaluate(step))
         json.dump({'args': vars(args), 'log': log}, open(os.path.join(odir, 'log.json'), 'w'), indent=1)
         if step > 0 and (step % args.save_every == 0 or step == args.steps):
