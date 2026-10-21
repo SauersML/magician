@@ -1475,19 +1475,25 @@ def acb_ridges(ax, x, y, w, d, title, col, labels):
 
 
 def acb_strip(ax, x0, x1, y, vals, ours, key):
-    """One measure: the paper's 25 models as grey dots (stacked where they touch), ours as coloured dots with
-    calibrated 95% intervals where computed; its own axis below."""
-    pts = [v for v in vals if v is not None] + [v for _, v, _, _ in ours] + \
-          [b for _, _, b, _ in ours if b is not None and np.isfinite(b[1]) and b[1] < 50]
-    lo, hi = min(pts + [0]), max(pts)
+    """One measure: the paper's 25 models as grey ticks, ours as coloured dots in lanes above them with calibrated 95%
+    intervals where computed; its own axis below. The axis spans the dots and 0; an interval end past that span by
+    more than 30% of the span is cut at the axis end and marked with an arrowhead."""
+    dots = [v for v in vals if v is not None] + [v for _, v, _, _ in ours]
+    lo, hi = min(dots + [0]), max(dots)
+    span = hi - lo
+    for _, _, band, _ in ours:
+        if band is not None:
+            if band[0] >= lo - 0.3 * span:
+                lo = min(lo, band[0])
+            if band[1] <= hi + 0.3 * span:
+                hi = max(hi, band[1])
     pad = 0.06 * (hi - lo)
     lo, hi = lo - pad, hi + pad
     sx = lambda v: x0 + (x1 - x0) * (v - lo) / (hi - lo)
     ax.plot([x0, x1], [y - 34, y - 34], color=INK, lw=1.5, zorder=2)
     if lo < 0 < hi:
         ax.plot([sx(0)] * 2, [y - 34, y + 30], color=TGT, lw=1.5, zorder=1)
-    ticks = MaxNLocator(3).tick_values(lo + pad, hi - pad)
-    for t in ticks:
+    for t in MaxNLocator(3).tick_values(lo + pad, hi - pad):
         if lo <= t <= hi:
             ax.plot([sx(t)] * 2, [y - 34, y - 42], color=INK, lw=1.5, zorder=2)
             lab = f"{100 * t:g}%" if key == "compliance" else f"{t:g}".replace("-", "−")
@@ -1498,8 +1504,12 @@ def acb_strip(ax, x0, x1, y, vals, ours, key):
     for i, (k, v, band, col) in enumerate(ours):
         yy = y + 8 + 22 * i
         if band is not None:
-            a, b = band
-            ax.plot([sx(max(a, lo)), sx(min(b, hi))], [yy, yy], color=col, lw=3.5, zorder=4, solid_capstyle="butt")
+            a, b = max(band[0], lo), min(band[1], hi)
+            ax.plot([sx(a), sx(b)], [yy, yy], color=col, lw=3.5, zorder=4, solid_capstyle="butt")
+            for end, cut, s in ((a, band[0] < lo, -1), (b, band[1] > hi, 1)):
+                if cut:
+                    ax.add_patch(Polygon([(sx(end) + 14 * s, yy), (sx(end), yy - 9), (sx(end), yy + 9)],
+                                         closed=True, fc=col, ec="none", zorder=4))
         ax.scatter([sx(v)], [yy], s=230, color=col, lw=0, zorder=5)
 
 
