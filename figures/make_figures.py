@@ -875,18 +875,15 @@ def axis(ax, x0, x1, lo, hi, y, ticks, top, size=22):
         write(ax, sx(v), y, lab, size, color=MUTED)
 
 
-def scores():
-    """Each test set: the share of the requested change and the pattern match r of the trained model and the original
-    model (mean and 95% bootstrap interval over 96 instructions; results/eval_r4.json)."""
-    E, _ = data()
-    fig, ax = canvas(3000)
-    y = 2960
-    lab_w = 390
+def score_block(ax, ox, y, arms, lab_w=390, gap=6):
+    """Each test set (SCORE_ROWS), from x offset ox and height y down: per arm (eval json, None or 'orig', colour, bar
+    height) the share of the requested change and the pattern match r (mean and 95% bootstrap interval over the
+    instructions of the set). Returns the bottom of the axes labels."""
     pct = lambda v: "0%" if round(100 * v) == 0 else f"{100 * v:.0f}%".replace("-", "−")
     dec = lambda v: "0.00" if round(v, 2) == 0 else f"{v:.2f}".replace("-", "−")
-    panels = (("share of the", "requested change", 420, 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"), (1.0, "100%")),
-               pct, "frac"),
-              ("pattern", "match r", 800, 1100, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
+    panels = (("share of the", "requested change", ox + 420, ox + 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"),
+                                                                                 (1.0, "100%")), pct, "frac"),
+              ("pattern", "match r", ox + 800, ox + 1100, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
     for h1, h2, a, b, lo, hi, *_ in panels:
         z = a + (b - a) * (0 - lo) / (hi - lo)
         write(ax, z, y - 20, h1, 26, True, ha="left")
@@ -895,36 +892,73 @@ def scores():
     top = y + 20
     for key, label in SCORE_ROWS:
         if key == "seen":
-            pill(ax, 24, y, "In the training set", 24, PANEL)
+            pill(ax, ox + 24, y, "In the training set", 24, PANEL)
             y -= 56
         if key == "new_wording":
             y -= 24
-            pill(ax, 24, y, "Never seen in training", 24, NEW)
+            pill(ax, ox + 24, y, "Never seen in training", 24, NEW)
             y -= 56
-        S = E["sets"][key]["summary"]
         rows_bottom = []
         for _, _, a, b, lo, hi, ticks, fmt, k in panels:
-            m, cl, ch = S[k][:3]
-            o = S["orig"][k][0]
-            rows_bottom.append(hbars(ax, a, b, lo, hi, y, [m, o], [PURPLE, ORIG], [34, 14], fmt,
-                                     cis=[(cl, ch), None]))
-        lb = rich(ax, 30, y + 6, label, 27, lab_w - 20)
+            got = []
+            for E, sub, _, _ in arms:
+                S = E["sets"].get(key, {}).get("summary")
+                got.append((S[sub][k] if sub else S[k]) if S else None)
+            cis = [g and tuple(g[1:3]) if sub is None else None for g, (_, sub, _, _) in zip(got, arms)]
+            rows_bottom.append(hbars(ax, a, b, lo, hi, y, [g and g[0] for g in got], [c for _, _, c, _ in arms],
+                                     [h for *_, h in arms], fmt, gap=gap, cis=cis))
+        lb = rich(ax, ox + 30, y + 6, label, 27, lab_w - 20)
         y = min(min(rows_bottom), lb) - 22
     for _, _, a, b, lo, hi, ticks, fmt, k in panels:
         axis(ax, a, b, lo, hi, y, ticks, top)
-    y -= 70
-    x = 30
-    for lab, col in (("trained model", PURPLE), ("original Qwen3-4B, thinking off", ORIG)):
+    return y
+
+
+def legend(ax, x, y, items, size=25):
+    """Colour squares with labels in one line, then the 95% interval mark below. Returns the bottom."""
+    for lab, col in items:
         rbox(ax, x, y - 15, 30, 30, col, radius=6)
-        write(ax, x + 42, y, lab, 25, True, ha="left")
-        x += 42 + text_width(ax, lab, 25, True) + 50
+        write(ax, x + 42, y, lab, size, True, ha="left")
+        x += 42 + text_width(ax, lab, size, True) + 50
     x, y = 30, y - 56
     ax.plot([x, x + 40], [y, y], color=INK, lw=2)
     for e in (x, x + 40):
         ax.plot([e] * 2, [y - 7, y + 7], color=INK, lw=2)
-    write(ax, x + 52, y, "95% interval", 25, True, ha="left")
+    write(ax, x + 52, y, "95% interval", size, True, ha="left")
+    return y
+
+
+def scores():
+    """Each test set: the share of the requested change and the pattern match r of the trained model and the original
+    model (mean and 95% bootstrap interval over 96 instructions; results/eval_r4.json)."""
+    E, _ = data()
+    fig, ax = canvas(3000)
+    y = score_block(ax, 0, 2960, [(E, None, PURPLE, 34), (E, "orig", ORIG, 14)])
+    y = legend(ax, 30, y - 70, (("trained model", PURPLE), ("original Qwen3-4B, thinking off", ORIG)))
     crop(fig, ax, y - 40, 3000)
     save(fig, "scores")
+
+
+TEAL = "#1A9E77"   # trained without plans
+
+
+def noplan():
+    """The same test sets for models trained without plans (no thinking block) next to models trained with plans:
+    Qwen3-4B after stage 1 (results/eval_q4c.json) and after stage 3 (eval_r4.json); Qwen3-1.7B trained from the same
+    adapter for 2500 steps on the same data without and with plans (eval_n17.json, eval_p17.json)."""
+    E4, N4, N17, P17 = (load(f"eval_{a}.json") for a in ("r4", "q4c", "n17", "p17"))
+    fig, ax = canvas(3000, 2 * W)
+    blocks = ((0, "Qwen3-4B, plans trained longer, on more layer patterns",
+               [(N4, None, TEAL, 32), (E4, None, PURPLE, 32), (E4, "orig", ORIG, 20)]),
+              (W, "Qwen3-1.7B, same training data",
+               [(N17, None, TEAL, 32), (P17, None, PURPLE, 32), (P17, "orig", ORIG, 20)]))
+    for ox, head, arms in blocks:
+        write(ax, ox + 30, 2950, head, 34, True, ha="left")
+        y = score_block(ax, ox, 2880, arms, gap=8)
+    y = legend(ax, 30, y - 70, (("trained without plans", TEAL), ("trained with plans", PURPLE),
+                                ("original model, thinking off", ORIG)))
+    crop(fig, ax, y - 40, 3000)
+    save(fig, "noplan")
 
 
 # 5b. What the two scores are computed from: every cell of one instruction.
@@ -1297,7 +1331,8 @@ def plan_height(text, size, width, wrong=()):
     return h
 
 
-FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "wave")
+FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "wave",
+           "noplan")
 
 if __name__ == "__main__":
     style()
