@@ -121,11 +121,13 @@ class Readout:
         return torch.stack(out, 2) * mask.to(DEVICE)[..., None, None]
 
 
-def generate(model, tok, users, bs=32, think=False, mids=None):
+def generate(model, tok, users, bs=32, think=False, mids=None, sample=False):
     """Greedy replies (token ids, up to and including the end token), REPLY_TOKENS at most, as prep.py writes them.
     think=True: the model first writes its thinking block (MAX_PLAN tokens at most); returns (thinking block ids, reply
     ids) pairs, with an empty reply when the block does not close. mids: given thinking blocks (token ids, as plan_ids
-    writes them) after each prompt; the model writes only the reply, and the result is (mids[j], reply) pairs."""
+    writes them) after each prompt; the model writes only the reply, and the result is (mids[j], reply) pairs.
+    sample=True (with think=True): the thinking block is sampled with the decoding Qwen recommends for thinking mode
+    (temperature 0.6, top-p 0.95, top-k 20), since greedy thinking falls into repetition loops."""
     tok.padding_side = 'left'
     out = []
     te, blank, ends = think_end(tok), tok('\n\n', add_special_tokens=False).input_ids, end_ids(tok)
@@ -141,7 +143,9 @@ def generate(model, tok, users, bs=32, think=False, mids=None):
                 T = max(len(p) for p in P)
                 ids = torch.tensor([[tok.pad_token_id] * (T - len(p)) + p for p in P], device=DEVICE)
                 att = torch.tensor([[0] * (T - len(p)) + [1] * len(p) for p in P], device=DEVICE)
-            g = model.generate(input_ids=ids, attention_mask=att, do_sample=False,
+            dec = (dict(do_sample=True, temperature=0.6, top_p=0.95, top_k=20) if sample and think and mids is None
+                   else dict(do_sample=False))
+            g = model.generate(input_ids=ids, attention_mask=att, **dec,
                                max_new_tokens=REPLY_TOKENS + (MAX_PLAN if think and mids is None else 0))
             for j, row in enumerate(g[:, ids.shape[1]:].tolist()):
                 mid = []

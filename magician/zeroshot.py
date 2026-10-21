@@ -1,7 +1,9 @@
 """Scores an original model, with no training, on the held-out sets: how much of the requested change it makes from the
 instruction alone, with thinking off and with thinking on. Scores and reference as in measure.py: the model's z on its
 own reply to the instruction minus its z reading the bare question followed by the same reply tokens. With thinking
-on, a thinking block still open after MAX_PLAN tokens is closed by hand and the model then writes its reply.
+on, the thinking block is sampled with Qwen's recommended thinking-mode decoding (greedy thinking falls into
+repetition loops), a block still open after MAX_PLAN tokens is closed by hand, and the model then writes its reply
+greedily.
 
 Usage: MAGIC_MODEL=Qwen/Qwen3.5-4B MAGIC_OUT=<run with prep.pt> python zeroshot.py --n 48
 Writes OUT/zeroshot.json.
@@ -23,6 +25,7 @@ ap.add_argument('--n', type=int, default=48)
 ap.add_argument('--bs', type=int, default=16, help='instructions per generation batch')
 ap.add_argument('--fbs', type=int, default=16, help='instructions per scoring forward pass')
 ap.add_argument('--sets', default=','.join(s for s in spec.EVAL_SETS if s != 'controls'))
+ap.add_argument('--greedy_think', action='store_true', help='greedy thinking blocks instead of sampled ones')
 args = ap.parse_args()
 
 t0 = time.time()
@@ -36,7 +39,11 @@ L = prep['dirs'].shape[0]
 _, te_t = C.splits()
 close = tok('\n</think>\n\n', add_special_tokens=False).input_ids
 
-out = {'model': C.MODEL, 'n': args.n, 'max_think': C.MAX_PLAN, 'think_off': {}, 'think_on': {}}
+torch.manual_seed(0)
+out = {'model': C.MODEL, 'n': args.n, 'max_think': C.MAX_PLAN,
+       'think_decoding': 'greedy' if args.greedy_think else
+       'sampled: temperature 0.6, top-p 0.95, top-k 20; replies greedy',
+       'think_off': {}, 'think_on': {}}
 for think in (False, True):
     for name in args.sets.split(','):
         exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.n)
@@ -46,7 +53,7 @@ for think in (False, True):
             users = [ex['user'] for ex in chunk]
             bare = [{'user': C.TASKS[ex['task']], 'task': ex['task'], 'edits': []} for ex in chunk]
             with torch.no_grad():
-                g = C.generate(model, tok, users, bs=args.bs, think=think)
+                g = C.generate(model, tok, users, bs=args.bs, think=think, sample=not args.greedy_think)
                 mids, closed = None, None
                 if think:
                     closed = [len(r) > 0 for _, r in g]
