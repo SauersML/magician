@@ -1,0 +1,73 @@
+{
+ "model": "qwen35_4b",
+ "n_outer": 1000,
+ "n_inner": 500,
+ "n_sentences": 50,
+ "n_concepts": 10,
+ "truth": {
+  "engage": 10.327213345381306,
+  "suppress": 0.34194322637310426,
+  "coverage": 2.434107461369874,
+  "dial_rank": 0.9716000000000001,
+  "temporal_control": 2.2245328386440817,
+  "layer_targeting": -0.029288167761641497,
+  "S": 0.39884908848600253
+ },
+ "coverage": {
+  "engage": 0.909,
+  "suppress": 0.908,
+  "coverage": 0.852,
+  "dial_rank": 0.912,
+  "temporal_control": 0.88,
+  "layer_targeting": 0.925,
+  "S": 0.911
+ },
+ "coverage_ci": {
+  "engage": [
+   0.8894485058981307,
+   0.9261008700575202
+  ],
+  "suppress": [
+   0.8883642274816803,
+   0.9251915548221445
+  ],
+  "coverage": [
+   0.8284575617048234,
+   0.8734472671715776
+  ],
+  "dial_rank": [
+   0.8927052349649914,
+   0.9288248657147135
+  ],
+  "temporal_control": [
+   0.8582331362071747,
+   0.8994990762518321
+  ],
+  "layer_targeting": [
+   0.9068915530385009,
+   0.9405538717887368
+  ],
+  "S": [
+   0.8916189999399975,
+   0.9279175354602401
+  ]
+ },
+ "hits": {
+  "engage": 909,
+  "suppress": 908,
+  "coverage": 852,
+  "dial_rank": 912,
+  "temporal_control": 880,
+  "layer_targeting": 925,
+  "S": 911
+ },
+ "median_width": {
+  "engage": 4.879042103730142,
+  "suppress": 0.4885499037398845,
+  "coverage": 1.644382630576814,
+  "dial_rank": 0.04185,
+  "temporal_control": 1.5328431838095542,
+  "layer_targeting": 0.03397682364414245,
+  "S": 0.11772809243985866
+ }
+}

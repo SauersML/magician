@@ -68,5 +68,55 @@
    "compliant": 0,
    "n": 8800
   }
+ },
+ "qwen3_4b_magician_prefix": {
+  "main": {
+   "compliant": 8598,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8796,
+   "n": 8800
+  }
+ },
+ "qwen3_1_7b_magician_prefix": {
+  "main": {
+   "compliant": 7145,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 7404,
+   "n": 8800
+  }
+ },
+ "qwen3_1_7b_magician_noplan_prefix": {
+  "main": {
+   "compliant": 2877,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 2964,
+   "n": 8800
+  }
+ },
+ "qwen3_4b_magician_noplan_origvec": {
+  "main": {
+   "compliant": 8455,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8756,
+   "n": 8800
+  }
+ },
+ "qwen3_4b_noplanvec": {
+  "main": {
+   "compliant": 8152,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8800,
+   "n": 8800
+  }
  }
 }
