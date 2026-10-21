@@ -1434,7 +1434,7 @@ ACB_MEASURES = (("layer_targeting", "Layer Targeting", "the concept only at the 
                 ("temporal_control", "Temporal Control", "at the start, once mid-sentence, or at the end"),
                 ("coverage", "Coverage", "on every kind of word in the sentence"),
                 ("S", "Overall score", "the six measures combined"),
-                ("compliance", "Copies the sentence", "share of answers that match the sentence"))
+                ("compliance", "Copies the sentence", "percent of answers that match the sentence"))
 PAPER_GREY = "#C7C7CC"
 
 
