@@ -1215,15 +1215,15 @@ def scale():
 
 
 def jlens():
-    """The trained Qwen3-4B's change on each test set read three ways: on the concept directions it was trained on, on
-    J-lens directions (the gradient of the concept's logit with respect to the residual stream), and on random
-    directions (results/jlens_r4.json, from magician/jlens.py)."""
+    """The trained Qwen3-4B's change on each test set read three ways: on the concept vectors used in training, on the
+    J-lens (the gradient of the concept's logit with respect to the residual stream), and on random vectors
+    (results/jlens_r4.json, from magician/jlens.py)."""
     J = load("jlens_r4.json")
     lens = lambda k: {"sets": {s: {"summary": v[k]} for s, v in J["sets"].items()}}
     fig, ax = canvas(3000)
     y = score_block(ax, 0, 2960, [(lens("trained"), None, PURPLE, 30), (lens("jlens"), None, TEAL, 30),
                                   (lens("random"), None, ORIG, 18)], gap=8)
-    y = legend(ax, 30, y - 70, (("trained directions", PURPLE), ("J-lens", TEAL), ("random directions", ORIG)))
+    y = legend(ax, 30, y - 70, (("concept vectors used in training", PURPLE), ("J-lens", TEAL), ("random vectors", ORIG)))
     crop(fig, ax, y - 40, 3000)
     save(fig, "jlens")
 
