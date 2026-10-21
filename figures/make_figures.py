@@ -1244,14 +1244,8 @@ def median_interval(xs, key):
 def zeroshot():
     """The newest Qwen model of each size, not trained, on the test instructions (results/zeroshot/<model>.json):
     share of the requested change and pattern match r over every instruction of every test set, with thinking off and
-    with thinking on; the trained Qwen3-4B on the same instructions (results/eval_r4.json) for reference."""
+    with thinking on."""
     Z = {m: load(f"zeroshot/{m}.json") for m, _ in ZS_MODELS if (RES / "zeroshot" / f"{m}.json").exists()}
-    first = next(iter(Z.values()))
-    sets, n = list(first["think_off"]), first["n"]
-    E = load("eval_r4.json")
-    trained = {k: median_interval([it[k] for s in sets for it in E["sets"][s]["items"][:n]], k)
-               for k in ("frac", "r")}
-    pct = lambda v: f"{100 * v:.0f}%"
     fig, ax = canvas(1100, 2 * W)
     panels = (("percent of the requested change", "frac", ((0, "0%"), (0.25, "25%"), (0.5, "50%"), (0.75, "75%"))),
               ("pattern match r", "r", ((0, "0"), (0.25, "0.25"), (0.5, "0.5"), (0.75, "0.75"))))
@@ -1264,9 +1258,10 @@ def zeroshot():
         ax.plot([x0, x1], [sy(0)] * 2, color=MUTED, lw=1.5, zorder=1)
         for v, lab in ticks:
             write(ax, x0 - 16, sy(v), lab, 24, color=MUTED, ha="right")
-        for _, s in ZS_MODELS:
-            write(ax, sx(s), y0 - 34, f"{s:g}B", 24, color=MUTED)
-        write(ax, (x0 + x1) / 2, y0 - 84, "parameters, original model", 26, color=MUTED)
+        for m, s in ZS_MODELS:
+            if m in Z:
+                write(ax, sx(s), y0 - 34, f"{s:g}B", 24, color=MUTED)
+        write(ax, (x0 + x1) / 2, y0 - 84, "parameters, untrained Qwen model", 26, color=MUTED)
         write(ax, x0, y1 + 50, title, 30, True, ha="left")
         for key, col, dx, lab in (("think_off", ORIG, -14, "thinking off"), ("think_on", INK, 14, "thinking on")):
             pts = [(s, median_interval([it[k] for st in Z[m][key].values() for it in st["items"]], k))
@@ -1276,12 +1271,7 @@ def zeroshot():
                 ax.scatter([sx(s) + dx], [sy(mu)], s=260, color=col, lw=0, zorder=4)
             if pts:
                 s, (mu, _, _) = pts[-1]
-                write(ax, sx(s) + dx + 30, sy(mu) + (26 if dx > 0 else -26), lab, 26, True, col, ha="left")
-        mu, cl, ch = trained[k]
-        ax.plot([sx(4)] * 2, [sy(cl), sy(ch)], color=PURPLE, lw=2.5, zorder=3)
-        ax.scatter([sx(4)], [sy(mu)], s=300, color=PURPLE, marker="D", lw=0, zorder=4)
-        write(ax, sx(4) + 30, sy(mu), "Qwen3-4B, trained, " + (pct(mu) if k == "frac" else f"{mu:.2f}"), 26, True,
-              PURPLE, ha="left")
+                write(ax, sx(s) + dx + 30, sy(mu) + (44 if dx > 0 else -26), lab, 26, True, col, ha="left")
     crop(fig, ax, 60, 1100)
     save(fig, "zeroshot")
 
