@@ -1479,8 +1479,6 @@ def acb_strip(ax, top, g, layer, concept="Volcanoes", sentence="The old photogra
               "layers. Don't write anything else.")
     marks = [(prompt.index(s), prompt.index(s) + len(s), "bold") for s in (concept, f"layer {layer}")]
     bottom = bubble(ax, 40, top, 860, prompt, BLUE, "white", 25, marks)
-    vec = f'concept vector: the activation at the end of "Tell me about {concept}" minus its mean over 100 other words'
-    rich(ax, 40, bottom - 30, vec, 22, 520, [(0, 15, "bold")], color=MUTED)
     sw, sg, x0 = 26, 8, 1130
     xs = lambda l: x0 + l * (sw + sg)
     x1 = xs(35) + sw
