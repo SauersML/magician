@@ -948,13 +948,14 @@ def noplan():
     adapter for 2500 steps on the same data without and with plans (eval_n17.json, eval_p17.json)."""
     E4, N4, N17, P17 = (load(f"eval_{a}.json") for a in ("r4", "q4c", "n17", "p17"))
     fig, ax = canvas(3000, 2 * W)
-    blocks = ((0, "Qwen3-4B, plans trained longer, on more layer patterns",
+    blocks = ((0, ("Qwen3-4B", "with plans: trained longer, on more layer patterns"),
                [(N4, None, TEAL, 32), (E4, None, PURPLE, 32), (E4, "orig", ORIG, 20)]),
-              (W, "Qwen3-1.7B, same training data",
+              (W, ("Qwen3-1.7B", "same training data"),
                [(N17, None, TEAL, 32), (P17, None, PURPLE, 32), (P17, "orig", ORIG, 20)]))
     for ox, head, arms in blocks:
-        write(ax, ox + 30, 2950, head, 34, True, ha="left")
-        y = score_block(ax, ox, 2880, arms, gap=8)
+        write(ax, ox + 30, 2950, head[0], 34, True, ha="left")
+        write(ax, ox + 30, 2900, head[1], 26, color=MUTED, ha="left")
+        y = score_block(ax, ox, 2850, arms, gap=8)
     y = legend(ax, 30, y - 70, (("trained without plans", TEAL), ("trained with plans", PURPLE),
                                 ("original model, thinking off", ORIG)))
     crop(fig, ax, y - 40, 3000)
