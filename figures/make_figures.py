@@ -1214,6 +1214,20 @@ def scale():
     save(fig, "scale")
 
 
+def jlens():
+    """The trained Qwen3-4B's change on each test set read three ways: on the concept directions it was trained on, on
+    J-lens directions (the gradient of the concept's logit with respect to the residual stream), and on random
+    directions (results/jlens_r4.json, from magician/jlens.py)."""
+    J = load("jlens_r4.json")
+    lens = lambda k: {"sets": {s: {"summary": v[k]} for s, v in J["sets"].items()}}
+    fig, ax = canvas(3000)
+    y = score_block(ax, 0, 2960, [(lens("trained"), None, PURPLE, 30), (lens("jlens"), None, TEAL, 30),
+                                  (lens("random"), None, ORIG, 18)], gap=8)
+    y = legend(ax, 30, y - 70, (("trained directions", PURPLE), ("J-lens", TEAL), ("random directions", ORIG)))
+    crop(fig, ax, y - 40, 3000)
+    save(fig, "jlens")
+
+
 # Zero-shot: original models of five sizes on the test instructions, without training.
 
 ZS_MODELS = (("Qwen3.5-0.8B", 0.8), ("Qwen3.5-2B", 2), ("Qwen3.5-4B", 4), ("Qwen3.5-9B", 9), ("Qwen3.8-27B", 27))
@@ -1402,7 +1416,7 @@ def plan_height(text, size, width, wrong=()):
 
 
 FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "wave",
-           "noplan", "scale", "zeroshot")
+           "noplan", "scale", "jlens", "zeroshot")
 
 if __name__ == "__main__":
     style()
