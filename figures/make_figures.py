@@ -883,7 +883,7 @@ def score_block(ax, ox, y, arms, lab_w=390, gap=6):
     instructions of the set, intervals.py). Returns the bottom of the axes labels."""
     pct = lambda v: "0%" if round(100 * v) == 0 else f"{100 * v:.0f}%".replace("-", "−")
     dec = lambda v: "0.00" if round(v, 2) == 0 else f"{v:.2f}".replace("-", "−")
-    panels = (("share of the", "requested change", ox + 420, ox + 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"),
+    panels = (("percent of the", "requested change", ox + 420, ox + 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"),
                                                                                  (1.0, "100%")), pct, "frac"),
               ("pattern", "match r", ox + 800, ox + 1100, -0.4, 0.8, ((0, "0"), (0.4, "0.4"), (0.8, "0.8")), dec, "r"))
     for h1, h2, a, b, lo, hi, *_ in panels:
@@ -1004,7 +1004,7 @@ def datapoints():
             lx += 32 + text_width(ax, K.NAMES[ci], 25, True) + 40
         slope = float((a * q).sum() / (q ** 2).sum())
         r = float(np.corrcoef(a.ravel(), q.ravel())[0, 1])
-        write(ax, ox + 30, ly - 58, f"share of the requested change {100 * slope:.0f}%", 26, True, ha="left")
+        write(ax, ox + 30, ly - 58, f"percent of the requested change: {100 * slope:.0f}%", 26, True, ha="left")
         write(ax, ox + 30, ly - 102, f"pattern match r {r:.2f}".replace("-", "−"), 26, True, ha="left")
         heads.append(ly - 102)
         stats.append((ox, q, a, cis, slope))
@@ -1033,7 +1033,7 @@ def datapoints():
         write(ax, (x0 + x1) / 2, top - h - 76, "requested change (SD)", 24, True)
         write(ax, x0 - 92, top - h / 2, "achieved change (SD)", 24, True, rotation=90)
     y = top - h - 160
-    labs = ("slope: share of the requested change", "achieved = requested")
+    labs = ("slope: percent of the requested change", "achieved = requested")
     tw = sum(text_width(ax, t, 26) for t in labs) + 2 * 56 + 70
     x = cw * len(CELL_SETS) / 2 - tw / 2
     for t, col, lw, ls in zip(labs, (INK, MUTED), (3, 2.5), ("-", (0, (4, 3)))):
@@ -1253,7 +1253,7 @@ def zeroshot():
                for k in ("frac", "r")}
     pct = lambda v: f"{100 * v:.0f}%"
     fig, ax = canvas(1100, 2 * W)
-    panels = (("share of the requested change", "frac", ((0, "0%"), (0.25, "25%"), (0.5, "50%"), (0.75, "75%"))),
+    panels = (("percent of the requested change", "frac", ((0, "0%"), (0.25, "25%"), (0.5, "50%"), (0.75, "75%"))),
               ("pattern match r", "r", ((0, "0"), (0.25, "0.25"), (0.5, "0.5"), (0.75, "0.75"))))
     lo, hi = -0.1, 0.8
     for p, (title, k, ticks) in enumerate(panels):
