@@ -1247,32 +1247,41 @@ def zeroshot():
     with thinking on."""
     Z = {m: load(f"zeroshot/{m}.json") for m, _ in ZS_MODELS if (RES / "zeroshot" / f"{m}.json").exists()}
     fig, ax = canvas(1100, 2 * W)
-    panels = (("percent of the requested change", "frac", ((0, "0%"), (0.25, "25%"), (0.5, "50%"), (0.75, "75%"))),
-              ("pattern match r", "r", ((0, "0"), (0.25, "0.25"), (0.5, "0.5"), (0.75, "0.75"))))
-    lo, hi = -0.1, 0.8
-    for p, (title, k, ticks) in enumerate(panels):
+    arms = (("think_off", ORIG, -14, "thinking off"), ("think_on", INK, 14, "thinking on"))
+    for p, (title, k) in enumerate((("percent of the requested change", "frac"), ("pattern match r", "r"))):
+        pts = {key: [(s, median_interval([it[k] for st in Z[m][key].values() for it in st["items"]], k))
+                     for m, s in ZS_MODELS if m in Z and Z[m][key]] for key, *_ in arms}
+        ends = [e for v in pts.values() for _, (_, cl, ch) in v for e in (cl, ch)] + [0]
+        lo, hi = min(ends), max(ends)
+        lo, hi = lo - 0.08 * (hi - lo), hi + 0.08 * (hi - lo)
         x0, x1, y0, y1 = 190 + p * W, (p + 1) * W - 250, 200, 940
         sx = lambda s: x0 + 40 + (x1 - x0 - 80) * np.log(s / 0.8) / np.log(27 / 0.8)
         sy = lambda v: y0 + (y1 - y0) * (v - lo) / (hi - lo)
         ax.plot([x0, x0], [y0, y1], color=INK, lw=2, zorder=2)
         ax.plot([x0, x1], [sy(0)] * 2, color=MUTED, lw=1.5, zorder=1)
-        for v, lab in ticks:
-            write(ax, x0 - 16, sy(v), lab, 24, color=MUTED, ha="right")
+        for t in MaxNLocator(4).tick_values(lo, hi):
+            if lo <= t <= hi:
+                lab = f"{100 * t:.1f}%" if k == "frac" else f"{t:.2f}"
+                write(ax, x0 - 16, sy(t), "0%" if k == "frac" and abs(t) < 1e-9 else "0" if abs(t) < 1e-9 else
+                      lab.replace("-", "−"), 24, color=MUTED, ha="right")
         for m, s in ZS_MODELS:
             if m in Z:
                 write(ax, sx(s), y0 - 34, f"{s:g}B", 24, color=MUTED)
         write(ax, (x0 + x1) / 2, y0 - 84, "parameters, untrained Qwen model", 26, color=MUTED)
         write(ax, x0, y1 + 50, title, 30, True, ha="left")
-        for key, col, dx, lab in (("think_off", ORIG, -14, "thinking off"), ("think_on", INK, 14, "thinking on")):
-            pts = [(s, median_interval([it[k] for st in Z[m][key].values() for it in st["items"]], k))
-                   for m, s in ZS_MODELS if m in Z and Z[m][key]]
-            for s, (mu, cl, ch) in pts:
+        for key, col, dx, lab in arms:
+            for s, (mu, cl, ch) in pts[key]:
                 ax.plot([sx(s) + dx] * 2, [sy(cl), sy(ch)], color=col, lw=2.5, zorder=3)
                 ax.scatter([sx(s) + dx], [sy(mu)], s=260, color=col, lw=0, zorder=4)
-            if pts:
-                s, (mu, _, _) = pts[-1]
-                write(ax, sx(s) + dx + 30, sy(mu) + (44 if dx > 0 else -26), lab, 26, True, col, ha="left")
-    crop(fig, ax, 60, 1100)
+    lx = W - (sum(text_width(ax, lab, 26, True) for *_, lab in arms) + text_width(ax, "95% interval for the median", 26, True)
+              + 3 * 34 + 2 * 60) / 2
+    for _, col, _, lab in arms:
+        ax.scatter([lx + 10], [30], s=260, color=col, lw=0, zorder=4)
+        write(ax, lx + 34, 30, lab, 26, True, col, ha="left")
+        lx += 34 + text_width(ax, lab, 26, True) + 60
+    ax.plot([lx + 10] * 2, [12, 48], color=INK, lw=2.5)
+    write(ax, lx + 34, 30, "95% interval for the median", 26, True, ha="left")
+    crop(fig, ax, 0, 1100)
     save(fig, "zeroshot")
 
 

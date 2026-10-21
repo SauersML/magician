@@ -48,9 +48,9 @@ Instructions from four test sets, each between the 35th and 65th percentile of i
 
 On held-out layer and token patterns, the trained model changes its representations as its own plan says, even where the plan is wrong. Red outlines mark where a plan differs from the instruction: for alternating tokens it plans every reply token, for fading it plans a rise, for powers of two it adds layer 24, and for prime layers it adds layer 37, which the model does not have.
 
-![Untrained Qwen models of other sizes](figures/zeroshot.png?v=1020z)
+![Untrained Qwen models of other sizes](figures/zeroshot.png?v=1020y)
 
-Untrained Qwen models make none of the requested change at any size we tried. On the same test instructions (48 from each of the 8 test sets), Qwen3.5-0.8B, Qwen3.5-2B, Qwen3.5-4B and Qwen3.8-27B with thinking off make 0% of the requested change, with pattern match r between −0.01 and 0.01 (medians over 384 instructions). With thinking on (sampled at temperature 0.6, top-p 0.95, up to 4096 thinking tokens, then a greedy reply), Qwen3.5-2B also makes 0%; it ends its thinking on its own in only 3% of answers, and the rest are closed by hand at 4096 tokens. Thinking-on runs of the other sizes, and a 9B run, did not finish.
+Untrained Qwen models make none of the requested change at any size we tried. On the same test instructions (48 from each of the 8 test sets), Qwen3.5-0.8B, Qwen3.5-2B, Qwen3.5-4B and Qwen3.8-27B with thinking off make at most 0.4% of the requested change, with pattern match r between −0.01 and 0.01 (medians over 384 instructions). With thinking on (sampled at temperature 0.6, top-p 0.95, up to 4096 thinking tokens, then a greedy reply), Qwen3.5-2B makes −0.3%; it ends its thinking on its own in only 3% of answers, and the rest are closed by hand at 4096 tokens. Thinking-on runs of the other sizes, and a 9B run, did not finish.
 
 ## Activation Controllability Benchmark
 
