@@ -22,7 +22,6 @@ TASKS = json.load(open(os.path.join(ROOT, 'tasks.json')))[:40 if SMOKE else None
 REPLY_TOKENS = 64
 PLAN = os.environ.get('MAGIC_PLAN', '0') in ('1', '2')  # write an explicit plan in the thinking block, then answer (2: as a table)
 MAX_PLAN = int(os.environ.get('MAGIC_MAX_PLAN', '768'))
-THINK_END = 151668                                  # </think>
 os.makedirs(OUT, exist_ok=True)
 
 
@@ -30,6 +29,15 @@ def load(dtype=torch.bfloat16):
     tok = AutoTokenizer.from_pretrained(MODEL)
     model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=dtype).to(DEVICE).eval()
     return tok, model
+
+
+def think_end(tok):
+    return tok.convert_tokens_to_ids('</think>')
+
+
+def end_ids(tok):
+    """Tokens that end a reply."""
+    return {tok.eos_token_id, tok.convert_tokens_to_ids('<|im_end|>'), tok.convert_tokens_to_ids('<|endoftext|>')}
 
 
 def chat_prefix(tok, user, think=False):
@@ -54,8 +62,9 @@ def splits(seed=0):
 
 
 def find_layers(model):
+    """The decoder blocks (of the language model, in a model that also reads images)."""
     for name, mod in model.named_modules():
-        if name.endswith('layers') and isinstance(mod, torch.nn.ModuleList):
+        if name.endswith('layers') and isinstance(mod, torch.nn.ModuleList) and 'visual' not in name:
             return mod
 
 
@@ -119,6 +128,7 @@ def generate(model, tok, users, bs=32, think=False, mids=None):
     writes them) after each prompt; the model writes only the reply, and the result is (mids[j], reply) pairs."""
     tok.padding_side = 'left'
     out = []
+    te, blank, ends = think_end(tok), tok('\n\n', add_special_tokens=False).input_ids, end_ids(tok)
     with torch.no_grad():
         for b in range(0, len(users), bs):
             if mids is None:
@@ -138,13 +148,13 @@ def generate(model, tok, users, bs=32, think=False, mids=None):
                 if mids is not None:
                     mid = mids[b + j]
                 elif think:
-                    if THINK_END not in row:
+                    if te not in row:
                         out.append((row, []))
                         continue
-                    k = row.index(THINK_END) + 1
-                    k += 1 if k < len(row) and row[k] == 271 else 0      # the blank line after </think>
+                    k = row.index(te) + 1
+                    k += len(blank) if row[k:k + len(blank)] == blank else 0      # the blank line after </think>
                     mid, row = row[:k], row[k:k + REPLY_TOKENS]
-                cut = next((i + 1 for i, x in enumerate(row) if x in (tok.eos_token_id, 151643)), len(row))
+                cut = next((i + 1 for i, x in enumerate(row) if x in ends), len(row))
                 out.append((mid, row[:cut]) if think or mids is not None else row[:cut])
     tok.padding_side = 'right'
     return out

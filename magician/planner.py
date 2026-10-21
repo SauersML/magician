@@ -135,7 +135,8 @@ class Planner:
                 g = model.generate(input_ids=ids, attention_mask=att, do_sample=False, max_new_tokens=self.think_tokens)
                 for ex, p, row in zip(exs[b:b + bs], P, g[:, T:].tolist()):
                     # the thinking up to </think> (closed by hand if the budget ran out), then the plan under the rules
-                    th = row[:row.index(C.THINK_END) + 1] if C.THINK_END in row else \
+                    te = C.think_end(tok)
+                    th = row[:row.index(te) + 1] if te in row else \
                         [t for t in row if t != tok.pad_token_id] + tok('\n</think>', add_special_tokens=False).input_ids
                     full = p + th + tok('\n\n', add_special_tokens=False).input_ids
                     o = model(torch.tensor([full], device=C.DEVICE), use_cache=True)

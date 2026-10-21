@@ -21,7 +21,7 @@ t0 = time.time()
 tok, model = C.load()
 res = C.Residuals(model)
 L = len(res.layers)
-d = model.config.hidden_size
+d = model.get_input_embeddings().embedding_dim
 NK = len(K.CONCEPTS)
 
 # 1. replies
@@ -35,7 +35,7 @@ if not os.path.exists(rp):
             enc = tok(prompts, return_tensors='pt', padding=True, add_special_tokens=False).to(C.DEVICE)
             g = model.generate(**enc, max_new_tokens=C.REPLY_TOKENS, do_sample=False)
             for row in g[:, enc.input_ids.shape[1]:].tolist():
-                cut = next((i + 1 for i, x in enumerate(row) if x in (tok.eos_token_id, 151643)), len(row))
+                cut = next((i + 1 for i, x in enumerate(row) if x in C.end_ids(tok)), len(row))
                 replies.append(row[:cut])
     tok.padding_side = 'right'
     json.dump([{'task': t, 'ids': r, 'text': tok.decode(r)} for t, r in zip(C.TASKS, replies)], open(rp, 'w'), indent=0)
