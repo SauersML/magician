@@ -1423,9 +1423,7 @@ def plan_height(text, size, width, wrong=()):
 
 # (results key, label, colour); rows without results in results/acb are left out.
 ACB_MODELS = (("qwen3_4b", "Qwen3-4B original", INK),
-              ("qwen3_4b_magician_noplan", "magician without plans", TEAL),
-              ("qwen3_4b_magician", "magician", PURPLE),
-              ("qwen3_4b_magician_think", "magician, thinking on", "#3D1A8C"))
+              ("qwen3_4b_magician", "magician", PURPLE))
 # (results key, the benchmark's name, what it asks; the bottom rows in order)
 ACB_MEASURES = (("layer_targeting", "Layer Targeting", "the concept only at the layer asked for"),
                 ("engage", "Engage", "the concept rises after “think about X”"),
@@ -1471,10 +1469,6 @@ def acb_ridges(ax, x, y, w, d, title, col, labels):
         if labels:
             write(ax, x - 18, b, str(asked[i]), 22, color=MUTED, ha="right")
     write(ax, x, y + (len(asked) - 1) * dy + 130, title, 30, True, col, ha="left")
-    t = d["transcription"]["compliant"]
-    if t < 0.9:   # the benchmark scores only the answers that copy the sentence
-        write(ax, x + text_width(ax, title, 30, True) + 16, y + (len(asked) - 1) * dy + 128,
-              f"copies the sentence in {100 * t:.0f}%", 22, color=MUTED, ha="left")
     for layer in (0, 12, 24, 35):
         write(ax, lx(layer), y - 44, str(layer), 22, color=MUTED)
     write(ax, x + w / 2, y - 84, "layer", 26, color=MUTED)
@@ -1531,12 +1525,12 @@ def acb():
     marks = [(prompt.index(s), prompt.index(s) + len(s), "bold") for s in ("Volcanoes", "layer 28")]
     bottom = bubble(ax, 40, top, 2 * W - 80, prompt, BLUE, "white", 27, marks)
 
-    rw, gap, x0 = 620, 100, 170
+    rw, gap, x0 = 960, 140, 170
     ry = bottom - 120 - 7 * 64 - 130
-    for p, (k, title, col) in enumerate(ACB_MODELS[:3]):
+    for p, (k, title, col) in enumerate(ACB_MODELS):
         acb_ridges(ax, x0 + p * (rw + gap), ry, rw, P[k], title, col, p == 0)
     write(ax, x0 - 18, ry + 7 * 64 + 56, "layer asked for", 22, color=MUTED, ha="left")
-    sb = x0 + 3 * rw + 2 * gap + 26
+    sb = x0 + 2 * rw + gap + 26
     ax.plot([sb, sb], [ry, ry + 13.0 * 2], color=INK, lw=2.5, zorder=3)
     write(ax, sb + 12, ry + 13, "2 SD", 22, color=INK, ha="left")
     ax.scatter([x0 + 10], [ry - 140], s=90, color=INK, lw=0, zorder=5)
