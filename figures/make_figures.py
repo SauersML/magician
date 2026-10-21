@@ -1428,13 +1428,13 @@ ACB_MODELS = (("qwen3_4b", "Qwen3-4B original", INK),
               ("qwen3_4b_magician_think", "magician, thinking on", "#3D1A8C"))
 # (results key, the benchmark's name, what it asks; the bottom rows in order)
 ACB_MEASURES = (("layer_targeting", "Layer Targeting", "the concept only at the layer asked for"),
-                ("engage", "Engage", "the concept rises when asked to think about it"),
-                ("suppress", "Suppress", "the concept falls when asked not to"),
-                ("dial_rank", "Dial", "its strength follows “intensity 1, 2, 3 or 4”"),
+                ("engage", "Engage", "the concept rises after “think about X”"),
+                ("suppress", "Suppress", "the concept falls after “do not think about X”"),
+                ("dial_rank", "Dial", "the concept’s strength follows “intensity 1, 2, 3 or 4”"),
                 ("temporal_control", "Temporal Control", "at the start, once mid-sentence, or at the end"),
                 ("coverage", "Coverage", "on every kind of word in the sentence"),
                 ("S", "Overall score", "the six measures combined"),
-                ("compliance", "Copies the sentence", "the share of answers that match it"))
+                ("compliance", "Copies the sentence", "share of answers that match the sentence"))
 PAPER_GREY = "#C7C7CC"
 
 
