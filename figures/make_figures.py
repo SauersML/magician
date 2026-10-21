@@ -1435,12 +1435,12 @@ ACB_ROWS = (("qwen35_4b", "Qwen3.5-4B", "original", INK),
             ("qwen3_1_7b_magician_noplan", "", "magician without plans", TEAL),
             ("qwen3_1_7b_magician_noplan_prefix", "", "magician without plans, base-model rule", TEAL))
 # (results key, header, axis low, axis high, ticks, the instruction the measure scores, a note under it)
-ACB_MEASURES = (("S", "S", 0, 0.6, (0, 0.5), (), "all six"),
+ACB_MEASURES = (("S", ("overall", "score"), 0, 0.6, (0, 0.5), (), ""),
                 ("engage", "Engage", 0, 16, (0, 10), ("think about X",), ""),
                 ("suppress", "Suppress", -0.1, 0.7, (0, 0.5), ("do not think", "about X"), ""),
                 ("dial_rank", "Dial", 0, 1, (0, 1), ("intensity", "1, 2, 3, 4 of 4"), ""),
                 ("temporal_control", "Temporal", 0, 4, (0, 2, 4), ("only at the", "beginning or end"), ""),
-                ("coverage", "Coverage", 0, 4, (0, 2, 4), ("think about X",), "per part of speech"),
+                ("coverage", "Coverage", 0, 4, (0, 2, 4), ("think about X",), ""),
                 ("layer_targeting", "Layer Targeting", -0.1, 2.5, (0, 1, 2), ("only at", "layer N"), ""))
 ACB_BEST_LT = 0.054   # the paper's best Layer Targeting over its 25 models (Qwen3.5-397B-A17B, its Table 1)
 ACB_LIM = 4.4         # SD at either end of the map's colour scale
@@ -1504,10 +1504,18 @@ def acb_strip(ax, top, g, layer, concept="Volcanoes", sentence="The old photogra
     rbox(ax, xs(an[0]) - 8, cy0 - 8, x1 - xs(an[0]) + 16, cy1 - cy0 + 16, "none", radius=8, z=5, edge=PURPLE, lw=3)
     for l in (1, 12, 23, layer, 35):
         write(ax, xs(l) + sw / 2, cy0 - 38, str(l), 22, l == layer, PURPLE if l == layer else MUTED)
-    write(ax, xs(an[0]) - 30, (cy0 + cy1) / 2 + 16, "projection on the concept vector", 24, ha="right")
-    write(ax, xs(an[0]) - 30, (cy0 + cy1) / 2 - 18, "mean over 10 concepts × 50 sentences", 22, color=MUTED,
-          ha="right")
+    cm = (cy0 + cy1) / 2
+    write(ax, xs(an[0]) - 30, cm, "projection on the concept vector", 24, ha="right")
     write(ax, xs(an[0]) - 30, cy0 - 38, "read layer", 22, color=MUTED, ha="right")
+    sw_, scx = 220, 300
+    ramp = np.linspace(-ACB_LIM, ACB_LIM, 256)[None, :]
+    ax.imshow(ramp, cmap=DIV, vmin=-ACB_LIM, vmax=ACB_LIM, extent=(scx - sw_ / 2, scx + sw_ / 2, cm - 13, cm + 13),
+              zorder=3, aspect="auto")
+    write(ax, scx - sw_ / 2 - 16, cm, "lowered", 26, True, ha="right")
+    write(ax, scx + sw_ / 2 + 16, cm, "raised", 26, True, ha="left")
+    for v in (-4, 0, 4):
+        write(ax, scx + sw_ * v / (2 * ACB_LIM), cm - 38, f"{v:+d} SD".replace("-", "−") if v else "0", 22,
+              color=MUTED)
     return cy0 - 60
 
 
@@ -1563,23 +1571,10 @@ def acb():
         acb_map(ax, x0 + p * (mw + gap), my, mw, mh, G[k], title, col, acb_point(C[k], "layer_targeting")[0],
                 ACB_LAYER if k == "qwen3_4b_magician" else None)
     write(ax, x0 - 90, my + mh / 2, "named layer", 26, color=MUTED, rotation=90)
-    cy = my - 140
-    lw_ = 520
-    cx = W
-    ramp = np.linspace(-ACB_LIM, ACB_LIM, 256)[None, :]
-    ax.imshow(ramp, cmap=DIV, vmin=-ACB_LIM, vmax=ACB_LIM, extent=(cx - lw_ / 2, cx + lw_ / 2, cy - 13, cy + 13),
-              zorder=3, aspect="auto")
-    write(ax, cx - lw_ / 2 - 18, cy, "lowered", 26, True, ha="right")
-    write(ax, cx + lw_ / 2 + 18, cy, "raised", 26, True, ha="left")
-    for v in (-4, 0, 4):
-        write(ax, cx + lw_ * v / (2 * ACB_LIM), cy - 40, f"{v:+d} SD".replace("-", "−") if v else "0", 22,
-              color=MUTED)
-    write(ax, cx, cy - 82, "change of the projection, minus its mean over the 8 named layers", 22, color=MUTED)
-
-    # S and the six measures, each under the instruction it scores
-    top = cy - 170
+    # The overall score S and its six measures, each under the instruction it scores
+    top = my - 140
     x_c = 730
-    panels = [(800, 960)] + [(1000 + j * 230, 1000 + j * 230 + 166) for j in range(6)]
+    panels = [(830, 975)] + [(1010 + j * 228, 1010 + j * 228 + 164) for j in range(6)]
     y_rows, yr = [], top - 230
     for i, (k, group, *_) in enumerate(rows):
         if i and group:
@@ -1587,7 +1582,8 @@ def acb():
         y_rows.append(yr)
         yr -= 58
     bottom = y_rows[-1] - 44
-    write(ax, x_c, top - 20, "compliance", 26, True, MUTED)
+    write(ax, x_c, top - 20, "sentence", 26, True, MUTED)
+    write(ax, x_c, top - 54, "copied", 26, True, MUTED)
     for (k, group, lab, col), yv in zip(rows, y_rows):
         write(ax, 24, yv, group, 26, True, ha="left")
         write(ax, 262, yv, lab, 26, True, col if col != ORIG else INK, ha="left")
@@ -1597,7 +1593,8 @@ def acb():
     for (key, name, lo, hi, ticks, chip, note), (a0, a1) in zip(ACB_MEASURES, panels):
         sx = lambda v: a0 + (a1 - a0) * (min(max(v, lo), hi) - lo) / (hi - lo)
         mid = (a0 + a1) / 2
-        write(ax, mid, top - 20, name, 34 if key == "S" else 26, True)
+        for i, line in enumerate((name,) if isinstance(name, str) else name):
+            write(ax, mid, top - 20 - 34 * i, line, 26, True)
         b = acb_chip(ax, mid, top - 52, chip) if chip else top - 52
         if note:   # under S's header, or under the lowest chip
             write(ax, mid, b - 22 if key == "S" else top - 52 - 2 * 20 * PT * 1.35 - 14 - 26, note, 20, color=MUTED)
@@ -1608,6 +1605,7 @@ def acb():
             write(ax, sx(v), bottom - 36, f"{v:g}".replace("-", "−"), 22, color=MUTED)
         if key == "layer_targeting":
             ax.plot([sx(ACB_BEST_LT)] * 2, [bottom, top - 190], color=INK, lw=1.5, ls=(0, (4, 4)), zorder=1)
+            write(ax, sx(ACB_BEST_LT), top - 170, "paper's best", 20, color=MUTED)
         for (k, _, _, col), yv in zip(rows, y_rows):
             v = acb_point(C[k], key)[0]
             if k in cal:
@@ -1618,10 +1616,7 @@ def acb():
             ax.scatter([sx(v)], [yv], s=260, color=col, lw=0, zorder=4)
             if key == "layer_targeting" and v > 0.5:
                 write(ax, sx(v), yv + 30, f"{v:.2f}", 24, True, col)
-    bars = "   Bars: calibrated 95% intervals." if cal else ""
-    write(ax, 24, bottom - 100, f"Thinking off unless a row says so.{bars}   Dashed: the best of the paper's 25 models.",
-          22, False, MUTED, ha="left")
-    crop(fig, ax, bottom - 130, 4390)
+    crop(fig, ax, bottom - 74, 4390)
     save(fig, "acb")
 
 
