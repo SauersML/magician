@@ -14,6 +14,7 @@ import time
 import torch
 
 import common as C
+import intervals
 import measure
 import spec
 
@@ -70,7 +71,7 @@ for think in (False, True):
                     it.update(measure.item_scores(dz[j, :n], tgt[j, :n], req[j]) if n else {'frac': 0.0, 'r': 0.0})
                     items.append(it)
         key = 'think_on' if think else 'think_off'
-        summ = {k: measure.summary(items, k) for k in ('frac', 'r')}
+        summ = {k: intervals.summary(items, k) for k in ('frac', 'r')}
         if think:
             summ['closed'] = sum(it['closed'] for it in items) / len(items)
         out[key][name] = {'summary': summ, 'items': items}

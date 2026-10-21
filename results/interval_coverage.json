@@ -1,0 +1,1468 @@
+{
+ "alpha": 0.05,
+ "n": 96,
+ "order_statistics": [
+  38,
+  59
+ ],
+ "rows": [
+  {
+   "population": "observed seen trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9365,
+   "width": 0.07976807591313648,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.971,
+   "width": 0.10444799423217774,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.0810194728532728,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.10088359954953194,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.939,
+   "width": 0.1025600190693027,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9785,
+   "width": 0.13797901229174298,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.10140613538803944,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.13281307828112626,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9475,
+   "width": 0.037952538813654485,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9725,
+   "width": 0.018166603997175117,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.037360466737600385,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.017891525388025912,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9355,
+   "width": 0.05003024956548697,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9725,
+   "width": 0.05861170546662343,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.05296421151839765,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.0606495935190549,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.935,
+   "width": 0.06331951962327195,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.963,
+   "width": 0.08743819877505303,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.06319842122268551,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.08266188704967499,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9375,
+   "width": 0.07222954457895217,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.974,
+   "width": 0.09787690261581207,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.07324520703384368,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.09633011542584273,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.935,
+   "width": 0.04038773126983628,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.976,
+   "width": 0.025850475826882758,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.040754471167368723,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.026093302907887847,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9415,
+   "width": 0.037955409566502465,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.964,
+   "width": 0.025720562402273616,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.038935496969801205,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed seen_new_blocks original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.02483414744057958,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9535,
+   "width": 0.08106119345852249,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9785,
+   "width": 0.10851197829842567,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.08127379264053888,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.09805257377028466,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9365,
+   "width": 0.08845156651076917,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.973,
+   "width": 0.1753479858458825,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.09073351760403647,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.1845471890642291,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9475,
+   "width": 0.044102669736119565,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.974,
+   "width": 0.023236313862726093,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.04465062971999916,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.023007305581995752,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.947,
+   "width": 0.0571142366822279,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.973,
+   "width": 0.04597224760566918,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.05558907474621439,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_wording original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.043978656662163065,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.939,
+   "width": 0.07738561775146029,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9775,
+   "width": 0.1134324900507927,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.07932128624058248,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.11191036188602448,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9445,
+   "width": 0.10482056736128051,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9705,
+   "width": 0.18215575897115685,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.1076938682774717,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.1980399727483085,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.915,
+   "width": 0.050297917789922306,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9745,
+   "width": 0.02565274582303391,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 0.9915,
+   "width": 0.04903526233180956,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.025563778650015592,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.944,
+   "width": 0.046827152693621796,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9795,
+   "width": 0.038144210124909976,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.048658387787742334,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_concepts original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.034127282127670994,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.945,
+   "width": 0.11240174915603315,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.973,
+   "width": 0.14132184694707395,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.11128617706779426,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.14874617893993855,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9365,
+   "width": 0.10712705016199052,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.971,
+   "width": 0.13685807853189877,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.10689011539121611,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.1451605459014681,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9115,
+   "width": 0.05436527805621177,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9775,
+   "width": 0.017180596814010643,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.05508426147400077,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.017723003674065693,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.946,
+   "width": 0.034786367375057164,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.97,
+   "width": 0.023414280479333024,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.03542387172740503,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_layer_patterns original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.02545869058717949,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9385,
+   "width": 0.09752679601680718,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.969,
+   "width": 0.12743119835853578,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.09716781909409034,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.13034051671624183,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.949,
+   "width": 0.09246981685907033,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9735,
+   "width": 0.13017497536204295,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.09153041297240534,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.1349019264979521,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.927,
+   "width": 0.061837136877635215,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.979,
+   "width": 0.0420186865789583,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.06232440809115811,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.04617546716332436,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9425,
+   "width": 0.04997075164645689,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.975,
+   "width": 0.036568328265590276,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.05143291783370467,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed new_token_patterns original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.03799275657371422,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.949,
+   "width": 0.058647529842324235,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.976,
+   "width": 0.10254866483807563,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.059209478802814054,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.1191063324213028,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9435,
+   "width": 0.060943288845755235,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.97,
+   "width": 0.07152882806963169,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.06099380488829365,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.06856312713870094,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.941,
+   "width": 0.0166824640919605,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9715,
+   "width": 0.01888020460435655,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.01689259146983804,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.021059264267096298,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.937,
+   "width": 0.03328886534217246,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9755,
+   "width": 0.046275265643780795,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.033221937531927925,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed three_edits original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.045864860917132884,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9395,
+   "width": 0.13000757712129357,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9705,
+   "width": 0.1312223265618086,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.12532269599787343,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.13057373356819152,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.94,
+   "width": 0.09107450201596812,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.972,
+   "width": 0.11101883770620859,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.09204307413392193,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new trained r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.11899433500724367,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original frac",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9365,
+   "width": 0.03808001477995761,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original frac",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9795,
+   "width": 0.013993356291990494,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original frac",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.03805378920022057,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original frac",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.01462425021675881,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original r",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.942,
+   "width": 0.03577784889125421,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original r",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9775,
+   "width": 0.025941946090288062,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original r",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.036272940528308456,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "observed all_new original r",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.027129392232841432,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "heavy tail (Student t, 1.5 df)",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.931,
+   "width": 2.1587805047103,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "heavy tail (Student t, 1.5 df)",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9655,
+   "width": 0.6667600391879044,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "heavy tail (Student t, 1.5 df)",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 0.9995,
+   "width": 2.264081563039285,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "heavy tail (Student t, 1.5 df)",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.6725501180950937,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "skewed (lognormal, sigma 1.5)",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.8485,
+   "width": 2.687735564179132,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "skewed (lognormal, sigma 1.5)",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9675,
+   "width": 0.8702256806930315,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "skewed (lognormal, sigma 1.5)",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 0.9735,
+   "width": 2.784203661903039,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "skewed (lognormal, sigma 1.5)",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.870093372990491,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "outliers (5% far from the rest)",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.8765,
+   "width": 0.41739563686492986,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "outliers (5% far from the rest)",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9735,
+   "width": 0.05929574230738399,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "outliers (5% far from the rest)",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 0.9475,
+   "width": 0.4421992929488281,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "outliers (5% far from the rest)",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.060182805096370216,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "bounded skewed in [-1, 1] (2 Beta(0.3, 3) - 1)",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9355,
+   "width": 0.1092901521978561,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "bounded skewed in [-1, 1] (2 Beta(0.3, 3) - 1)",
+   "design": "same",
+   "method": "median",
+   "coverage": 0.9615,
+   "width": 0.08715934141465623,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "bounded skewed in [-1, 1] (2 Beta(0.3, 3) - 1)",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.113366236887008,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "bounded skewed in [-1, 1] (2 Beta(0.3, 3) - 1)",
+   "design": "strata",
+   "method": "median",
+   "coverage": 1.0,
+   "width": 0.08753629172794046,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "8 of 96 skewed (lognormal, sigma 1.5), the rest narrow",
+   "design": "groups",
+   "method": "bootstrap",
+   "coverage": 0.7275,
+   "width": 0.5367071297660284,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "8 of 96 skewed (lognormal, sigma 1.5), the rest narrow",
+   "design": "groups",
+   "method": "median",
+   "coverage": 0.972,
+   "width": 0.059983649686343704,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.99",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.6195,
+   "width": 0.027136067708333905,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.99",
+   "design": "same",
+   "method": "exact",
+   "coverage": 0.9845,
+   "width": 0.05456085844703424,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.99",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 0.641,
+   "width": 0.026745182291667245,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.99",
+   "design": "strata",
+   "method": "exact",
+   "coverage": 0.991,
+   "width": 0.054318745067790955,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.9",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.945,
+   "width": 0.11717447916666669,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.9",
+   "design": "same",
+   "method": "exact",
+   "coverage": 0.9745,
+   "width": 0.12837514089795835,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.9",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.11864973958333334,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.9",
+   "design": "strata",
+   "method": "exact",
+   "coverage": 1.0,
+   "width": 0.1298418147967572,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.5",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.942,
+   "width": 0.19812747395833322,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.5",
+   "design": "same",
+   "method": "exact",
+   "coverage": 0.957,
+   "width": 0.206608763273216,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.5",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 1.0,
+   "width": 0.19839986979166674,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.5",
+   "design": "strata",
+   "method": "exact",
+   "coverage": 1.0,
+   "width": 0.20763748941081853,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.05",
+   "design": "same",
+   "method": "bootstrap",
+   "coverage": 0.9395,
+   "width": 0.0821466145833333,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.05",
+   "design": "same",
+   "method": "exact",
+   "coverage": 0.974,
+   "width": 0.09598697320632818,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.05",
+   "design": "strata",
+   "method": "bootstrap",
+   "coverage": 0.9865,
+   "width": 0.08366419270833332,
+   "n": 96,
+   "reps": 2000
+  },
+  {
+   "population": "0/1 score, mean 0.05",
+   "design": "strata",
+   "method": "exact",
+   "coverage": 1.0,
+   "width": 0.09680327540733373,
+   "n": 96,
+   "reps": 2000
+  }
+ ]
+}

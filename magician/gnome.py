@@ -21,6 +21,7 @@ from peft import PeftModel
 
 import common as C
 import concepts as K
+import intervals
 import measure
 import spec
 
@@ -132,16 +133,16 @@ arms = {'own': dict(), 'forced': dict(forced=True), 'alone': dict(forced='alone'
 for arm, kw in arms.items():
     items = measure.score(lm, model, tok, res, ext, exs, replies, orig=arm == 'own', keep_profiles=True, **kw)
     out[arm] = {'items': [{k: v for k, v in it.items() if k not in ('dz', 'target', 'orig_dz')} for it in items],
-                'dz': heat(items, 'dz'), 'summary': {k: measure.summary(items, k) for k in ('frac', 'r')}}
+                'dz': heat(items, 'dz'), 'summary': {k: intervals.summary(items, k) for k in ('frac', 'r')}}
     if arm == 'own':
         out[arm]['plan_r'] = [float(np.corrcoef(plan_sum(it['plan']).ravel(), hat.ravel())[0, 1])
                               if plan_sum(it['plan']).std() > 0 else 0.0 for it in items]
         out['orig'] = {'dz': heat(items, 'orig_dz'),
-                       'summary': {k: measure.summary(items, k, 'orig') for k in ('frac', 'r')}}
+                       'summary': {k: intervals.summary(items, k, 'orig') for k in ('frac', 'r')}}
     print(arm, out[arm]['summary'], flush=True)
 print('orig', out['orig']['summary'], 'own plan r with the hat', out['own']['plan_r'], flush=True)
 items = measure.score(lm, model, tok, res, ext, [ex(t, shape_only) for t in qs], replies, keep_profiles=True)
 out['shape'] = {'items': [{k: v for k, v in it.items() if k not in ('dz', 'target')} for it in items],
-                'dz': heat(items, 'dz'), 'summary': {k: measure.summary(items, k) for k in ('frac', 'r')}}
+                'dz': heat(items, 'dz'), 'summary': {k: intervals.summary(items, k) for k in ('frac', 'r')}}
 print('shape only', out['shape']['summary'], [it['plan'][:200] for it in items[:2]], flush=True)
 torch.save(out, args.out)

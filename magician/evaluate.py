@@ -14,6 +14,7 @@ import torch
 from peft import PeftModel
 
 import common as C
+import intervals
 import measure
 import spec
 from planner import Planner
@@ -47,15 +48,17 @@ for name in args.sets.split(','):
     exs = spec.eval_set(name, L, te_t, C.TASKS, n=args.n)
     items = measure.score(lm, model, tok, res, prep, exs, replies, orig=True, keep_profiles=True)
     profiles[name] = [{k: it.pop(k) for k in ('dz', 'target', 'orig_dz') if k in it} for it in items]
-    summ = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
-    summ['orig'] = {k: measure.summary(items, k, 'orig') for k in ('frac', 'r', 'rel_err', 'leak', 'rms')}
+    summ = {k: intervals.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
+    summ['orig'] = {k: intervals.summary(items, k, 'orig') for k in ('frac', 'r', 'rel_err', 'leak', 'rms')}
+    summ['minus_orig'] = {k: intervals.paired([it.get(k, np.nan) for it in items],                 # same instructions
+                                              [it['orig'].get(k, np.nan) for it in items], k) for k in ('frac', 'r')}
     out['sets'][name] = {'summary': summ, 'items': items}
     if C.PLAN:   # the same instructions with the exact plan in the thinking block: is a right plan carried out?
         fi = measure.score(lm, model, tok, res, prep, exs, replies, forced=True)
-        out['sets'][name]['forced'] = {'summary': {k: measure.summary(fi, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
+        out['sets'][name]['forced'] = {'summary': {k: intervals.summary(fi, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
                                        'items': fi}
         fa = measure.score(lm, model, tok, res, prep, exs, replies, forced='alone')   # the plan after the bare question
-        out['sets'][name]['alone'] = {'summary': {k: measure.summary(fa, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
+        out['sets'][name]['alone'] = {'summary': {k: intervals.summary(fa, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms')},
                                       'items': fa}
     if C.PLAN and name in args.base_plan_sets.split(','):   # the original model writes the plan, the adapter carries it out
         planner = planner or Planner(model, tok, L, think=args.plan_think > 0, think_tokens=args.plan_think)
@@ -67,7 +70,7 @@ for name in args.sets.split(','):
         ps = [measure.plan_scores(p, ex, L) for p, ex in zip(plans, exs)]
         for it, p in zip(fb, ps):
             it.update(p)
-        out['sets'][name]['base_plan'] = {'summary': {k: measure.summary(fb, k) for k in ('frac', 'r', 'leak', 'plan_exact', 'plan_r')},
+        out['sets'][name]['base_plan'] = {'summary': {k: intervals.summary(fb, k) for k in ('frac', 'r', 'leak', 'plan_exact', 'plan_r')},
                                           'items': fb}
         print(f'{name:20s} plan by the original model: exact {out["sets"][name]["base_plan"]["summary"]["plan_exact"][0]:.2f}'
               f' frac {out["sets"][name]["base_plan"]["summary"]["frac"][0]:.2f} r {out["sets"][name]["base_plan"]["summary"]["r"][0]:.2f}', flush=True)

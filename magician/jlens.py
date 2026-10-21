@@ -25,6 +25,7 @@ from peft import PeftModel
 
 import common as C
 import concepts as K
+import intervals
 import measure
 import spec
 
@@ -163,8 +164,11 @@ for name, S in ev['sets'].items():
                 rows[k].append(measure.item_scores(zt[k][j, :n] - zb[k][j, :n], tgt[j, :n], req[j]) if n else
                                {'frac': 0.0, 'r': 0.0})
                 rows[f'orig_{k}'].append(measure.item_scores(zo[k][j, :no] - zob[k][j, :no], tgt_o[j, :no], req[j]))
-    out['sets'][name] = {k: {m: measure.summary(v, m) for m in ('frac', 'r')} for k, v in rows.items()}
+    out['sets'][name] = {k: {'items': v} for k, v in rows.items()}
+    json.dump(out, open(args.out, 'w'), indent=1)
     s = out['sets'][name]
+    for k, v in rows.items():
+        s[k].update({m: intervals.summary(v, m) for m in ('frac', 'r')})
     print(f'{name:20s} ' + ' | '.join(f'{k} frac {s[k]["frac"][0]:+.2f} r {s[k]["r"][0]:+.2f}' for k in rows)
           + f'  {time.time() - t0:.0f}s', flush=True)
     json.dump(out, open(args.out, 'w'), indent=1)

@@ -117,13 +117,3 @@ def plan_scores(text, ex, L):
     have = np.concatenate([got.get(K.NAMES[ci], np.zeros_like(p)).ravel() for ci, p in ex['edits']])
     r = float(np.corrcoef(want, have)[0, 1]) if have.std() > 0 and want.std() > 0 else float(np.allclose(want, have, atol=0.06))
     return {'plan': body, 'plan_exact': float(np.allclose(want, have, atol=0.06)), 'plan_r': r}
-
-
-def summary(items, key, sub=None):
-    xs = np.array([(it[sub] if sub else it).get(key, np.nan) for it in items], float)
-    xs = xs[~np.isnan(xs)]
-    if len(xs) == 0:
-        return None
-    rng = np.random.default_rng(0)
-    bs = xs[rng.integers(0, len(xs), (2000, len(xs)))].mean(1)
-    return [float(xs.mean()), float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5)), float(np.median(xs)), len(xs)]

@@ -22,6 +22,7 @@ OUT = ROOT / "figures"
 ASSETS = OUT / "assets"
 sys.path.insert(0, str(ROOT / "magician"))
 import concepts as K  # noqa: E402
+import intervals  # noqa: E402
 import spec  # noqa: E402
 
 INK = "#1D1D1F"
@@ -877,8 +878,8 @@ def axis(ax, x0, x1, lo, hi, y, ticks, top, size=22):
 
 def score_block(ax, ox, y, arms, lab_w=390, gap=6):
     """Each test set (SCORE_ROWS), from x offset ox and height y down: per arm (eval json, None or 'orig', colour, bar
-    height) the share of the requested change and the pattern match r (mean and 95% bootstrap interval over the
-    instructions of the set). Returns the bottom of the axes labels."""
+    height) the share of the requested change and the pattern match r (median and its exact 95% interval over the
+    instructions of the set, intervals.py). Returns the bottom of the axes labels."""
     pct = lambda v: "0%" if round(100 * v) == 0 else f"{100 * v:.0f}%".replace("-", "−")
     dec = lambda v: "0.00" if round(v, 2) == 0 else f"{v:.2f}".replace("-", "−")
     panels = (("share of the", "requested change", ox + 420, ox + 760, 0.0, 1.0, ((0, "0%"), (0.5, "50%"),
@@ -924,13 +925,13 @@ def legend(ax, x, y, items, size=25):
     ax.plot([x, x + 40], [y, y], color=INK, lw=2)
     for e in (x, x + 40):
         ax.plot([e] * 2, [y - 7, y + 7], color=INK, lw=2)
-    write(ax, x + 52, y, "95% interval", size, True, ha="left")
+    write(ax, x + 52, y, "95% interval for the median", size, True, ha="left")
     return y
 
 
 def scores():
     """Each test set: the share of the requested change and the pattern match r of the trained model and the original
-    model (mean and 95% bootstrap interval over 96 instructions; results/eval_r4.json)."""
+    model (median and its exact 95% interval over 96 instructions; results/eval_r4.json)."""
     E, _ = data()
     fig, ax = canvas(3000)
     y = score_block(ax, 0, 2960, [(E, None, PURPLE, 34), (E, "orig", ORIG, 14)])
@@ -1223,7 +1224,8 @@ def jlens():
     fig, ax = canvas(3000)
     y = score_block(ax, 0, 2960, [(lens("trained"), None, PURPLE, 30), (lens("jlens"), None, TEAL, 30),
                                   (lens("random"), None, ORIG, 18)], gap=8)
-    y = legend(ax, 30, y - 70, (("concept vectors used in training", PURPLE), ("J-lens", TEAL), ("random vectors", ORIG)))
+    y = legend(ax, 30, y - 70, (("concept vectors used in training", PURPLE), ("J-lens", TEAL),
+                                ("random vectors", ORIG)))
     crop(fig, ax, y - 40, 3000)
     save(fig, "jlens")
 
@@ -1233,11 +1235,9 @@ def jlens():
 ZS_MODELS = (("Qwen3.5-0.8B", 0.8), ("Qwen3.5-2B", 2), ("Qwen3.5-4B", 4), ("Qwen3.5-9B", 9), ("Qwen3.8-27B", 27))
 
 
-def boot(xs):
-    """Mean and 95% bootstrap interval."""
-    xs = np.asarray(xs, float)
-    b = xs[np.random.default_rng(0).integers(0, len(xs), (2000, len(xs)))].mean(1)
-    return float(xs.mean()), float(np.percentile(b, 2.5)), float(np.percentile(b, 97.5))
+def median_interval(xs, key):
+    """Median of the per-instruction scores and its exact 95% interval (intervals.py)."""
+    return tuple(intervals.interval(xs, key)[:3])
 
 
 def zeroshot():
@@ -1248,7 +1248,8 @@ def zeroshot():
     first = next(iter(Z.values()))
     sets, n = list(first["think_off"]), first["n"]
     E = load("eval_r4.json")
-    trained = {k: boot([it[k] for s in sets for it in E["sets"][s]["items"][:n]]) for k in ("frac", "r")}
+    trained = {k: median_interval([it[k] for s in sets for it in E["sets"][s]["items"][:n]], k)
+               for k in ("frac", "r")}
     pct = lambda v: f"{100 * v:.0f}%"
     fig, ax = canvas(1100, 2 * W)
     panels = (("share of the requested change", "frac", ((0, "0%"), (0.25, "25%"), (0.5, "50%"), (0.75, "75%"))),
@@ -1267,7 +1268,7 @@ def zeroshot():
         write(ax, (x0 + x1) / 2, y0 - 84, "parameters, original model", 26, color=MUTED)
         write(ax, x0, y1 + 50, title, 30, True, ha="left")
         for key, col, dx, lab in (("think_off", ORIG, -14, "thinking off"), ("think_on", INK, 14, "thinking on")):
-            pts = [(s, boot([it[k] for st in Z[m][key].values() for it in st["items"]]))
+            pts = [(s, median_interval([it[k] for st in Z[m][key].values() for it in st["items"]], k))
                    for m, s in ZS_MODELS if m in Z and Z[m][key]]
             for s, (mu, cl, ch) in pts:
                 ax.plot([sx(s) + dx] * 2, [sy(cl), sy(ch)], color=col, lw=2.5, zorder=3)

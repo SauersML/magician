@@ -20,6 +20,7 @@ from peft import LoraConfig, PeftModel, get_peft_model
 
 import common as C
 import concepts as K
+import intervals
 import measure
 import spec
 
@@ -87,12 +88,12 @@ def evaluate(step):
     for n, exs in evals.items():
         items = measure.score(lm, model, tok, res, prep, exs, replies, orig=(step == 0))
         key = 'rms' if n == 'controls' else 'frac'
-        row[n] = {k: measure.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
+        row[n] = {k: intervals.summary(items, k) for k in ('frac', 'r', 'rel_err', 'leak', 'rms', 'plan_exact', 'plan_r')}
         if step == 0:
-            row[n]['orig'] = {k: measure.summary(items, k, 'orig') for k in ('frac', 'r', 'rms')}
+            row[n]['orig'] = {k: intervals.summary(items, k, 'orig') for k in ('frac', 'r', 'rms')}
     if C.PLAN:   # the exact plan after the bare question: does the model carry out a plan it did not get from the prompt?
         for n in ('seen', 'new_layer_patterns'):
-            row[n]['alone_r'] = measure.summary(measure.score(lm, model, tok, res, prep, evals[n], replies, forced='alone'), 'r')
+            row[n]['alone_r'] = intervals.summary(measure.score(lm, model, tok, res, prep, evals[n], replies, forced='alone'), 'r')
     model.train()
     f = lambda s, k: (row[s][k] or [float('nan')])[0]
     print(f'EVAL step {step}: ' + '  '.join(f'{n} frac {f(n, "frac"):+.2f} r {f(n, "r"):+.2f} leak {f(n, "leak"):.2f}'
