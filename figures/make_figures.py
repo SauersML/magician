@@ -1419,13 +1419,20 @@ def plan_height(text, size, width, wrong=()):
 # The Activation Controllability Benchmark (Kowalski et al. 2026) on its own protocol, prompts, concept vectors and
 # scoring: S and its six measures, and the layer-targeting maps.
 
+# (results key, model group, label, colour); a key ending in _prefix is the same run scored with the paper's
+# compliance rule for base models (only the first |sentence| characters), marked *.
 ACB_ROWS = (("qwen35_4b", "Qwen3.5-4B", "original", INK),
             ("qwen3_4b", "Qwen3-4B", "original", ORIG),
             ("qwen3_4b_magician", "", "magician", PURPLE),
+            ("qwen3_4b_magician_prefix", "", "magician *", PURPLE),
+            ("qwen3_4b_magician_think", "", "magician, thinking on", PURPLE),
             ("qwen3_4b_magician_noplan", "", "magician without plans", TEAL),
             ("qwen3_1_7b", "Qwen3-1.7B", "original", ORIG),
             ("qwen3_1_7b_magician", "", "magician", PURPLE),
-            ("qwen3_1_7b_magician_noplan", "", "magician without plans", TEAL))
+            ("qwen3_1_7b_magician_prefix", "", "magician *", PURPLE),
+            ("qwen3_1_7b_magician_think", "", "magician, thinking on", PURPLE),
+            ("qwen3_1_7b_magician_noplan", "", "magician without plans", TEAL),
+            ("qwen3_1_7b_magician_noplan_prefix", "", "magician without plans *", TEAL))
 ACB_MEASURES = (("S", ("S",), 0, 0.6, (0, 0.3, 0.6)),
                 ("engage", ("Engage", "d′"), 0, 16, (0, 8, 16)),
                 ("suppress", ("Suppress", "d′"), -0.1, 0.7, (0, 0.3, 0.6)),
@@ -1450,7 +1457,7 @@ def acb_point(C, key):
     return c["obs"], c["lo"], c["hi"]
 
 
-def acb_map(ax, x, y, w, h, g, title, col, score):
+def acb_map(ax, x, y, w, h, g, title, col, score, note=None):
     """One layer-targeting map: instructed layer (up) by read layer (across), column-demeaned standardized
     projection change, the cells with read layer = instructed layer outlined."""
     M = np.clip(np.array(g["grid"], float), -ACB_LIM, ACB_LIM)
@@ -1469,6 +1476,8 @@ def acb_map(ax, x, y, w, h, g, title, col, score):
     write(ax, x + w / 2, y - 66, "read layer", 26, color=MUTED)
     v, lo, hi = score
     write(ax, x, y + h + 86, title, 30, True, col, ha="left")
+    if note:
+        write(ax, x + text_width(ax, title, 30, True) + 18, y + h + 86, note, 24, False, MUTED, ha="left")
     write(ax, x, y + h + 40, f"Layer Targeting {acb_num(v)}  [{acb_num(lo)}, {acb_num(hi)}]", 26, False, col,
           ha="left")
 
@@ -1477,22 +1486,26 @@ def acb():
     """Top: the layer-targeting maps (FIGDATA_<model>.json, from the benchmark's figdata.py) of the original Qwen3-4B
     and its two magicians. Bottom: S and its six measures for every model (SCALAR_CI_<model>.json, from its
     scalar_ci.py), the paper's own Qwen3.5-4B (published/SCALAR_CI_qwen35_4b.json) as a reference mark, and the
-    compliance of each main run (compliance.json). Thinking off for every model."""
+    compliance of each main run (compliance.json). Thinking off unless a row says otherwise; rows whose results are
+    not in results/acb are left out."""
     A = RES / "acb"
     C = {k: json.loads((A / f"SCALAR_CI_{k}.json").read_text()) for k, *_ in ACB_ROWS
          if (A / f"SCALAR_CI_{k}.json").exists()}
     paper = json.loads((A / "published" / "SCALAR_CI_qwen35_4b.json").read_text())
     comp = json.loads((A / "compliance.json").read_text())
-    fig, ax = canvas(3000, 2 * W)
+    rows = [r for r in ACB_ROWS if r[0] in comp]
+    pct = lambda k, run="main": 100 * comp[k][run]["compliant"] / comp[k][run]["n"]
+    fig, ax = canvas(3600, 2 * W)
 
     # Layer-targeting maps
     maps = (("qwen3_4b", "Qwen3-4B original", INK), ("qwen3_4b_magician", "magician", PURPLE),
             ("qwen3_4b_magician_noplan", "magician without plans", TEAL))
     mw, mh, gap, x0 = 650, 352, 120, 150
-    my = 2960 - 130 - mh
+    my = 3560 - 130 - mh
     for p, (k, title, col) in enumerate(maps):
         g = json.loads((A / f"FIGDATA_{k}.json").read_text())["layer_targeting"]
-        acb_map(ax, x0 + p * (mw + gap), my, mw, mh, g, title, col, acb_point(C[k], "layer_targeting"))
+        note = f"{pct(k, 'lt'):.0f}% of trials scored" if pct(k, "lt") < 90 else None
+        acb_map(ax, x0 + p * (mw + gap), my, mw, mh, g, title, col, acb_point(C[k], "layer_targeting"), note)
     write(ax, x0 - 90, my + mh / 2, "instructed layer", 26, color=MUTED, rotation=90)
     cy = my - 140
     lw_ = 520
@@ -1512,18 +1525,17 @@ def acb():
     x_s, w_s = 830, 250
     x_c = 735
     y_rows, y = [], top - 120
-    for i, (k, *_) in enumerate(ACB_ROWS):
-        if i in (1, 4):
+    for i, (k, group, *_) in enumerate(rows):
+        if i and group:
             y -= 34
         y_rows.append(y)
         y -= 58
     bottom = y_rows[-1] - 44
     write(ax, x_c, top - 40, "compliance", 26, True, MUTED)
-    for (k, group, lab, col), yr in zip(ACB_ROWS, y_rows):
+    for (k, group, lab, col), yr in zip(rows, y_rows):
         write(ax, 24, yr, group, 26, True, ha="left")
         write(ax, 252, yr, lab, 26, True, col if col != ORIG else INK, ha="left")
-        c = comp[k]["main"]
-        write(ax, x_c, yr, f"{100 * c['compliant'] / c['n']:.0f}%", 26, False, col if col != ORIG else INK)
+        write(ax, x_c, yr, f"{pct(k):.0f}%", 26, False, col if col != ORIG else INK)
     for j, (key, name, lo, hi, ticks) in enumerate(ACB_MEASURES):
         a0, a1 = (x_s, x_s + w_s) if j == 0 else (xs + (j - 1) * (pw + gp), xs + (j - 1) * (pw + gp) + pw)
         sx = lambda v: a0 + (a1 - a0) * (min(max(v, lo), hi) - lo) / (hi - lo)
@@ -1538,7 +1550,7 @@ def acb():
             ax.plot([sx(ACB_BEST_LT)] * 2, [bottom, top - 90], color=INK, lw=1.5, ls=(0, (4, 4)), zorder=1)
         pv = acb_point(paper, key)[0]
         ax.scatter([sx(pv)], [y_rows[0]], s=560, facecolor="none", edgecolor=INK, lw=2.5, zorder=5)
-        for (k, _, _, col), yr in zip(ACB_ROWS, y_rows):
+        for (k, _, _, col), yr in zip(rows, y_rows):
             if k not in C:
                 continue
             v, cl, ch = acb_point(C[k], key)
@@ -1548,7 +1560,7 @@ def acb():
             ax.scatter([sx(v)], [yr], s=260, color=col, lw=0, zorder=4)
             if key == "layer_targeting" and v > 0.5:
                 write(ax, sx(v), yr + 30, f"{v:.2f}", 24, True, col)
-    for (k, _, _, col), yr in zip(ACB_ROWS, y_rows):
+    for (k, _, _, col), yr in zip(rows, y_rows):
         if k not in C and comp[k]["main"]["compliant"] == 0:
             t = write(ax, (x_s + xs + 6 * (pw + gp) - gp) / 2, yr, "not scored: every answer goes on past the sentence",
                       24, False, MUTED)
@@ -1556,15 +1568,22 @@ def acb():
     lt0 = xs + 5 * (pw + gp)
     write(ax, lt0 + pw, bottom - 80, f"dashed: the paper's best of 25 models, {ACB_BEST_LT}", 22, False, MUTED,
           ha="right")
-    notes = ("Thinking off for every model.  Dot: score.  Bar: the benchmark's own 95% interval, a two-way bootstrap "
-             "over its 50 sentences and 10 concepts.",
-             "Ring: the paper's Qwen3.5-4B.  Compliance: share of main-run answers that match the sentence.",
+    m4 = pct("qwen3_4b_magician")
+    notes = ("Thinking off unless a row says otherwise.  Dot: score.  Bar: the benchmark's own 95% interval, a two-way "
+             "bootstrap over its 50 sentences and 10 concepts.",
+             "Ring: the paper's Qwen3.5-4B.  Compliance: share of main-run answers that match the sentence.  The benchmark "
+             "scores only those trials,",
+             f"so the Qwen3-4B magician's measures come from {m4:.0f}% of its trials.  *  Only the first |sentence| "
+             "characters of each answer are checked, the paper's rule for base models.",
+             "Layer Targeting, magician without plans vs original, matched trials: higher for 10/10 concepts and 49/49 "
+             "sentences (exact sign-flip p = 0.002 over concepts).",
              "Maps: change of the projection on the concept vector at each read layer when the prompt names a layer, "
-             "in SD,",
-             "minus that read layer's mean over the named layers.  Boxes: read layer = named layer.")
+             "in SD, minus that read layer's mean over the named layers.",
+             "Boxes: read layer = named layer.")
     for i, t in enumerate(notes):
+        assert 24 + text_width(ax, t, 22) < 2 * W - 20, t
         write(ax, 24, bottom - 140 - 40 * i, t, 22, False, MUTED, ha="left")
-    crop(fig, ax, bottom - 140 - 40 * len(notes), 2990)
+    crop(fig, ax, bottom - 140 - 40 * len(notes), 3590)
     save(fig, "acb")
 
 
