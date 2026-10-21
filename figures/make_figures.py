@@ -1427,7 +1427,7 @@ ACB_MODELS = (("qwen3_4b", "Qwen3-4B original", INK),
               ("qwen3_4b_magician", "magician", PURPLE),
               ("qwen3_4b_magician_think", "magician, thinking on", "#3D1A8C"))
 # (results key, the benchmark's name, what it asks; the bottom rows in order)
-ACB_MEASURES = (("layer_targeting", "Layer Targeting", "the concept only at the layer the prompt names"),
+ACB_MEASURES = (("layer_targeting", "Layer Targeting", "the concept only at the layer asked for"),
                 ("engage", "Engage", "the concept rises when asked to think about it"),
                 ("suppress", "Suppress", "the concept falls when asked not to"),
                 ("dial_rank", "Dial", "its strength follows “intensity 1, 2, 3 or 4”"),
@@ -1531,13 +1531,13 @@ def acb():
     ry = bottom - 120 - 7 * 64 - 130
     for p, (k, title, col) in enumerate(ACB_MODELS[:3]):
         acb_ridges(ax, x0 + p * (rw + gap), ry, rw, P[k], title, col, p == 0)
-    write(ax, x0 - 18, ry + 7 * 64 + 56, "layer the prompt names", 22, color=MUTED, ha="left")
+    write(ax, x0 - 18, ry + 7 * 64 + 56, "layer asked for", 22, color=MUTED, ha="left")
     sb = x0 + 3 * rw + 2 * gap + 26
     ax.plot([sb, sb], [ry, ry + 13.0 * 2], color=INK, lw=2.5, zorder=3)
     write(ax, sb + 12, ry + 13, "2 SD", 22, color=INK, ha="left")
     ax.scatter([x0 + 10], [ry - 140], s=90, color=INK, lw=0, zorder=5)
-    write(ax, x0 + 30, ry - 140, "the layer the prompt names", 22, color=MUTED, ha="left")
-    write(ax, x0 + 30 + text_width(ax, "the layer the prompt names", 22) + 60, ry - 140,
+    write(ax, x0 + 30, ry - 140, "the layer asked for", 22, color=MUTED, ha="left")
+    write(ax, x0 + 30 + text_width(ax, "the layer asked for", 22) + 60, ry - 140,
           "height: how strongly the concept is present, compared with no instruction", 22, color=MUTED, ha="left")
 
     # Every measure against the paper's 25 models
