@@ -1,0 +1,73 @@
+{
+ "model": "qwen3_4b_magician_noplan",
+ "n_outer": 1000,
+ "n_inner": 500,
+ "n_sentences": 49,
+ "n_concepts": 10,
+ "truth": {
+  "engage": 5.883323505899229,
+  "suppress": 0.1761973391250702,
+  "coverage": 1.5097669969327643,
+  "dial_rank": 1.0,
+  "temporal_control": 0.8053112072467656,
+  "layer_targeting": 1.1564378163240063,
+  "S": 0.32491566490441004
+ },
+ "coverage": {
+  "engage": 0.908,
+  "suppress": 0.927,
+  "coverage": 0.954,
+  "dial_rank": 1.0,
+  "temporal_control": 0.913,
+  "layer_targeting": 0.876,
+  "S": 0.914
+ },
+ "hits": {
+  "engage": 908,
+  "suppress": 927,
+  "coverage": 954,
+  "dial_rank": 1000,
+  "temporal_control": 913,
+  "layer_targeting": 876,
+  "S": 914
+ },
+ "median_width": {
+  "engage": 2.313477740850634,
+  "suppress": 0.1435328097601862,
+  "coverage": 0.8486360287411792,
+  "dial_rank": 0.0,
+  "temporal_control": 0.319603503464,
+  "layer_targeting": 0.1644029919335368,
+  "S": 0.05262908624616014
+ },
+ "coverage_ci": {
+  "engage": [
+   0.8883642274816803,
+   0.9251915548221445
+  ],
+  "suppress": [
+   0.9090858246054988,
+   0.9423463747720674
+  ],
+  "coverage": [
+   0.9391164472862573,
+   0.9661285014523221
+  ],
+  "dial_rank": [
+   0.9963179161031344,
+   1.0
+  ],
+  "temporal_control": [
+   0.8937921420429789,
+   0.9297315139286214
+  ],
+  "layer_targeting": [
+   0.8539601750294528,
+   0.8957968808047537
+  ],
+  "S": [
+   0.8948797315656734,
+   0.9306374694275863
+  ]
+ }
+}
