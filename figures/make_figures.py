@@ -1201,6 +1201,75 @@ def wave():
     save(fig, "wave")
 
 
+def scale():
+    """Qwen3-1.7B and Qwen3-4B trained from scratch with the same recipe, without plans (thinking off), evaluated on
+    the same test sets (results/eval_s17.json: 3000 steps; eval_s4.json: 2500 steps)."""
+    S17, S4 = load("eval_s17.json"), load("eval_s4.json")
+    fig, ax = canvas(3000)
+    write(ax, 30, 2950, "Same training recipe, no plans", 34, True, ha="left")
+    write(ax, 30, 2900, "1.7B trained 3000 steps, 4B trained 2500 steps", 26, color=MUTED, ha="left")
+    y = score_block(ax, 0, 2850, [(S17, None, BLUE, 32), (S4, None, PURPLE, 32)], gap=8)
+    y = legend(ax, 30, y - 70, (("Qwen3-1.7B", BLUE), ("Qwen3-4B", PURPLE)))
+    crop(fig, ax, y - 40, 3000)
+    save(fig, "scale")
+
+
+# Zero-shot: original models of five sizes on the test instructions, without training.
+
+ZS_MODELS = (("Qwen3.5-0.8B", 0.8), ("Qwen3.5-2B", 2), ("Qwen3.5-4B", 4), ("Qwen3.5-9B", 9), ("Qwen3.8-27B", 27))
+
+
+def boot(xs):
+    """Mean and 95% bootstrap interval."""
+    xs = np.asarray(xs, float)
+    b = xs[np.random.default_rng(0).integers(0, len(xs), (2000, len(xs)))].mean(1)
+    return float(xs.mean()), float(np.percentile(b, 2.5)), float(np.percentile(b, 97.5))
+
+
+def zeroshot():
+    """The newest Qwen model of each size, not trained, on the test instructions (results/zeroshot/<model>.json):
+    share of the requested change and pattern match r over every instruction of every test set, with thinking off and
+    with thinking on; the trained Qwen3-4B on the same instructions (results/eval_r4.json) for reference."""
+    Z = {m: load(f"zeroshot/{m}.json") for m, _ in ZS_MODELS if (RES / "zeroshot" / f"{m}.json").exists()}
+    first = next(iter(Z.values()))
+    sets, n = list(first["think_off"]), first["n"]
+    E = load("eval_r4.json")
+    trained = {k: boot([it[k] for s in sets for it in E["sets"][s]["items"][:n]]) for k in ("frac", "r")}
+    pct = lambda v: f"{100 * v:.0f}%"
+    fig, ax = canvas(1100, 2 * W)
+    panels = (("share of the requested change", "frac", ((0, "0%"), (0.25, "25%"), (0.5, "50%"), (0.75, "75%"))),
+              ("pattern match r", "r", ((0, "0"), (0.25, "0.25"), (0.5, "0.5"), (0.75, "0.75"))))
+    lo, hi = -0.1, 0.8
+    for p, (title, k, ticks) in enumerate(panels):
+        x0, x1, y0, y1 = 190 + p * W, (p + 1) * W - 250, 200, 940
+        sx = lambda s: x0 + 40 + (x1 - x0 - 80) * np.log(s / 0.8) / np.log(27 / 0.8)
+        sy = lambda v: y0 + (y1 - y0) * (v - lo) / (hi - lo)
+        ax.plot([x0, x0], [y0, y1], color=INK, lw=2, zorder=2)
+        ax.plot([x0, x1], [sy(0)] * 2, color=MUTED, lw=1.5, zorder=1)
+        for v, lab in ticks:
+            write(ax, x0 - 16, sy(v), lab, 24, color=MUTED, ha="right")
+        for _, s in ZS_MODELS:
+            write(ax, sx(s), y0 - 34, f"{s:g}B", 24, color=MUTED)
+        write(ax, (x0 + x1) / 2, y0 - 84, "parameters, original model", 26, color=MUTED)
+        write(ax, x0, y1 + 50, title, 30, True, ha="left")
+        for key, col, dx, lab in (("think_off", ORIG, -14, "thinking off"), ("think_on", INK, 14, "thinking on")):
+            pts = [(s, boot([it[k] for st in Z[m][key].values() for it in st["items"]]))
+                   for m, s in ZS_MODELS if m in Z and Z[m][key]]
+            for s, (mu, cl, ch) in pts:
+                ax.plot([sx(s) + dx] * 2, [sy(cl), sy(ch)], color=col, lw=2.5, zorder=3)
+                ax.scatter([sx(s) + dx], [sy(mu)], s=260, color=col, lw=0, zorder=4)
+            if pts:
+                s, (mu, _, _) = pts[-1]
+                write(ax, sx(s) + dx + 30, sy(mu) + (26 if dx > 0 else -26), lab, 26, True, col, ha="left")
+        mu, cl, ch = trained[k]
+        ax.plot([sx(4)] * 2, [sy(cl), sy(ch)], color=PURPLE, lw=2.5, zorder=3)
+        ax.scatter([sx(4)], [sy(mu)], s=300, color=PURPLE, marker="D", lw=0, zorder=4)
+        write(ax, sx(4) + 30, sy(mu), "Qwen3-4B, trained, " + (pct(mu) if k == "frac" else f"{mu:.2f}"), 26, True,
+              PURPLE, ha="left")
+    crop(fig, ax, 60, 1100)
+    save(fig, "zeroshot")
+
+
 # A plan in a thinking block.
 
 def mono_width(ax, size):
@@ -1333,7 +1402,7 @@ def plan_height(text, size, width, wrong=()):
 
 
 FIGURES = ("overview", "recipe", "training", "split", "scores", "datapoints", "examples", "outside", "wave",
-           "noplan")
+           "noplan", "scale", "zeroshot")
 
 if __name__ == "__main__":
     style()
