@@ -1,0 +1,280 @@
+{
+ "source": "github.com/mkobalski/activation-control at 4189f93: results/SCALAR_CI_<model>.json (S), results/SCORES_<model>.json (each measure, projection readout), compliance/compliance_by_model.json (main run; null where the paper did not record it); the paper's 25-model roster (figure_scripts/roster.py)",
+ "models": {
+  "gemma2_9b": {
+   "name": "Gemma 2 9B",
+   "S": 0.38947406703874154,
+   "engage": 5.55338495646534,
+   "suppress": 0.5386400888237434,
+   "dial_rank": 0.9955999999999999,
+   "temporal_control": 5.017795770939965,
+   "coverage": 1.3059815180680978,
+   "layer_targeting": 0.01700113401807956,
+   "compliance": 0.865
+  },
+  "gemma4_12b": {
+   "name": "Gemma 4 12B",
+   "S": 0.17483698246057466,
+   "engage": 2.3533670914299956,
+   "suppress": 0.43617490882529875,
+   "dial_rank": 0.5532,
+   "temporal_control": 1.8874526318909937,
+   "coverage": 0.04128589433996079,
+   "layer_targeting": 0.024167967117496525,
+   "compliance": 0.9998837209302326
+  },
+  "gemma3_27b": {
+   "name": "Gemma 3 27B",
+   "S": 0.3506295599467373,
+   "engage": 6.081467065004292,
+   "suppress": 0.1697577281492567,
+   "dial_rank": 0.938,
+   "temporal_control": 3.436315855951283,
+   "coverage": 1.7833588095894286,
+   "layer_targeting": 0.033967145319588846,
+   "compliance": 0.9333720930232559
+  },
+  "gemma4_31b": {
+   "name": "Gemma 4 31B",
+   "S": 0.2486599174213746,
+   "engage": 1.3849694163644979,
+   "suppress": 1.4485273376691734,
+   "dial_rank": 0.7008,
+   "temporal_control": 2.32005025577104,
+   "coverage": 0.16305128880088765,
+   "layer_targeting": -0.012337970483433228,
+   "compliance": 1.0
+  },
+  "qwen35_4b": {
+   "name": "Qwen 3.5 4B",
+   "S": 0.399602277517747,
+   "engage": 10.267071191907341,
+   "suppress": 0.35515948860949276,
+   "dial_rank": 0.9724,
+   "temporal_control": 2.2371826230058582,
+   "coverage": 2.4315878870197674,
+   "layer_targeting": -0.0286438557368282,
+   "compliance": 0.9988372093023256
+  },
+  "qwen35_9b": {
+   "name": "Qwen 3.5 9B",
+   "S": 0.4564698914036489,
+   "engage": 12.926129175146679,
+   "suppress": 0.5596328783856327,
+   "dial_rank": 0.7088000000000001,
+   "temporal_control": 3.934535246441182,
+   "coverage": 2.807930372667124,
+   "layer_targeting": -0.019218944459432667,
+   "compliance": 0.9984883720930232
+  },
+  "qwen36_27b": {
+   "name": "Qwen 3.6 27B",
+   "S": 0.13636866238585665,
+   "engage": 3.2655945569471934,
+   "suppress": 0.23450864321914516,
+   "dial_rank": 0.8492000000000001,
+   "temporal_control": 0.2532252121793607,
+   "coverage": -0.5403162198676663,
+   "layer_targeting": 0.0016187618882225387,
+   "compliance": 0.996860465116279
+  },
+  "qwen_72b": {
+   "name": "Qwen 2.5 72B",
+   "S": 0.33919651273745455,
+   "engage": 10.554638392099438,
+   "suppress": -0.032984622393547866,
+   "dial_rank": 0.952,
+   "temporal_control": 2.7507864975672938,
+   "coverage": 1.2097172875723126,
+   "layer_targeting": 0.02119973403381964,
+   "compliance": 0.9832558139534884
+  },
+  "qwen35_122b_a10b": {
+   "name": "Qwen 3.5 122B",
+   "S": 0.292368630919837,
+   "engage": 8.142610657146127,
+   "suppress": 0.206892034530579,
+   "dial_rank": 0.8528,
+   "temporal_control": 2.6361378815914143,
+   "coverage": 0.530074573305214,
+   "layer_targeting": 0.03748013964916011,
+   "compliance": 0.9995348837209302
+  },
+  "llama_8b": {
+   "name": "Llama 3.1 8B",
+   "S": 0.5382573896556402,
+   "engage": 13.96250699313689,
+   "suppress": 0.4284354834673336,
+   "dial_rank": 1.0,
+   "temporal_control": 4.823416307863864,
+   "coverage": 3.422497495703052,
+   "layer_targeting": 0.027398811154313772,
+   "compliance": 0.8817441860465116
+  },
+  "llama33_70b": {
+   "name": "Llama 3.3 70B",
+   "S": 0.34604057181859793,
+   "engage": 7.1169602166649755,
+   "suppress": 0.22184061960115672,
+   "dial_rank": 0.978,
+   "temporal_control": 3.9889238407363954,
+   "coverage": 0.9585774389572699,
+   "layer_targeting": 0.016402220892991454,
+   "compliance": 0.94
+  },
+  "llama4_scout": {
+   "name": "Llama 4 Scout 109B",
+   "S": 0.31667598616891257,
+   "engage": 5.211277459934037,
+   "suppress": 0.25079654947869756,
+   "dial_rank": 0.9164000000000001,
+   "temporal_control": 3.313488586058778,
+   "coverage": 1.1780061421051942,
+   "layer_targeting": -0.0010699481971497764,
+   "compliance": 0.9096511627906977
+  },
+  "gptoss_20b_low": {
+   "name": "GPT-OSS 20B",
+   "S": 0.07204679525226787,
+   "engage": 0.8327183998094811,
+   "suppress": 0.1497128736720184,
+   "dial_rank": 0.3788,
+   "temporal_control": 0.18016865422152506,
+   "coverage": -0.11095099186608286,
+   "layer_targeting": -0.0021626749380480826,
+   "compliance": 0.9998837209302326
+  },
+  "gptoss_120b_low": {
+   "name": "GPT-OSS 120B",
+   "S": 0.0589500551118749,
+   "engage": 0.7424277252748644,
+   "suppress": 0.2760929948623378,
+   "dial_rank": 0.3456,
+   "temporal_control": -0.22413097395147566,
+   "coverage": -0.20466408974425976,
+   "layer_targeting": -0.0069242556946005835,
+   "compliance": 0.9977906976744186
+  },
+  "olmo3_7b": {
+   "name": "Olmo 3 7B",
+   "S": 0.41510817889865614,
+   "engage": 12.81316028459799,
+   "suppress": 0.1390088546625623,
+   "dial_rank": 0.6790322580645162,
+   "temporal_control": 3.3404025012936978,
+   "coverage": 2.940022622258282,
+   "layer_targeting": 0.0399501612546638,
+   "compliance": 0.6843023255813954
+  },
+  "olmo31_32b": {
+   "name": "Olmo 3.1 32B",
+   "S": 0.40186403324630415,
+   "engage": 8.706621261087406,
+   "suppress": -0.01028234610384371,
+   "dial_rank": 0.9472,
+   "temporal_control": 6.769600072885015,
+   "coverage": 1.1957383461108988,
+   "layer_targeting": -0.005054848092130993,
+   "compliance": 0.9445348837209302
+  },
+  "mistral_small_31_24b": {
+   "name": "Mistral Small 3.1 24B",
+   "S": 0.38226640411297175,
+   "engage": 13.298103756332978,
+   "suppress": 0.35947367048662754,
+   "dial_rank": 0.5630653266331658,
+   "temporal_control": 1.9874695897279677,
+   "coverage": 2.9609566881587495,
+   "layer_targeting": -0.034726812730343184,
+   "compliance": 0.8955813953488372
+  },
+  "mistral_small_4": {
+   "name": "Mistral Small 4 119B",
+   "S": 0.3946444813439549,
+   "engage": 10.444739282634895,
+   "suppress": 0.10316042211238499,
+   "dial_rank": 0.942,
+   "temporal_control": 3.238592015954073,
+   "coverage": 2.1690031309557654,
+   "layer_targeting": -0.015448005486537455,
+   "compliance": 0.9259302325581396
+  },
+  "glm47_flash": {
+   "name": "GLM 4.7 Flash 31B",
+   "S": 0.423127029325449,
+   "engage": 10.005477008472905,
+   "suppress": -0.1002730581937524,
+   "dial_rank": 0.9856850715746421,
+   "temporal_control": 4.8623840816227935,
+   "coverage": 2.3300455803846667,
+   "layer_targeting": 0.03201862959331685,
+   "compliance": 0.9597674418604651
+  },
+  "glm46v": {
+   "name": "GLM 4.6V 106B",
+   "S": 0.47174107726266556,
+   "engage": 16.061744029690377,
+   "suppress": 0.15306333253062515,
+   "dial_rank": 0.7324596774193547,
+   "temporal_control": 2.8227212343056194,
+   "coverage": 4.032346784533148,
+   "layer_targeting": 0.05020902902802166,
+   "compliance": 0.9605813953488372
+  },
+  "qwen3_235b_a22b_2507": {
+   "name": "Qwen 3 235B",
+   "S": 0.2684038729006315,
+   "engage": 5.515241380105566,
+   "suppress": -0.296313771911062,
+   "dial_rank": 0.924,
+   "temporal_control": 2.5814631307810334,
+   "coverage": 1.2595653803317366,
+   "layer_targeting": 0.005520747719705576,
+   "compliance": null
+  },
+  "qwen35_397b_a17b": {
+   "name": "Qwen 3.5 397B",
+   "S": 0.3568612549621839,
+   "engage": 11.279327575313461,
+   "suppress": 0.4292388864639019,
+   "dial_rank": 0.7692,
+   "temporal_control": 3.315817620752775,
+   "coverage": 0.9115809286643994,
+   "layer_targeting": 0.05353019441362169,
+   "compliance": 0.9994
+  },
+  "qwen3_coder_480b": {
+   "name": "Qwen 3 Coder 480B",
+   "S": 0.38609070695650716,
+   "engage": 10.928645749501083,
+   "suppress": -0.35041203021560546,
+   "dial_rank": 0.7845,
+   "temporal_control": 4.966218006479512,
+   "coverage": 2.336810303175883,
+   "layer_targeting": 0.005018760191112243,
+   "compliance": 0.835
+  },
+  "llama4_maverick": {
+   "name": "Llama 4 Maverick 400B",
+   "S": 0.32645837364243646,
+   "engage": 7.082737537730489,
+   "suppress": 0.11630352610703307,
+   "dial_rank": 0.8336000000000001,
+   "temporal_control": 2.7554341238434152,
+   "coverage": 1.740332680498943,
+   "layer_targeting": 0.013515133174412022,
+   "compliance": 0.9559
+  },
+  "glm52": {
+   "name": "GLM 5.2 744B",
+   "S": 0.2706855372522379,
+   "engage": 7.112080915548515,
+   "suppress": -0.1312050222362949,
+   "dial_rank": 0.498,
+   "temporal_control": 3.7239607280764275,
+   "coverage": 1.3479504720073099,
+   "layer_targeting": 0.012288968878916989,
+   "compliance": 0.9991
+  }
+ }
+}
