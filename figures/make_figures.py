@@ -1431,7 +1431,7 @@ ACB_MEASURES = (("layer_targeting", "Layer Targeting", "the concept only at the 
                 ("engage", "Engage", "the concept rises when asked to think about it"),
                 ("suppress", "Suppress", "the concept falls when asked not to"),
                 ("dial_rank", "Dial", "its strength follows “intensity 1, 2, 3 or 4”"),
-                ("temporal_control", "Temporal Control", "only at the start or the end of the sentence"),
+                ("temporal_control", "Temporal Control", "at the start, once mid-sentence, or at the end"),
                 ("coverage", "Coverage", "on every kind of word in the sentence"),
                 ("S", "Overall score", "the six measures combined"),
                 ("compliance", "Copies the sentence", "the share of answers that match it"))
@@ -1471,6 +1471,10 @@ def acb_ridges(ax, x, y, w, d, title, col, labels):
         if labels:
             write(ax, x - 18, b, str(asked[i]), 22, color=MUTED, ha="right")
     write(ax, x, y + (len(asked) - 1) * dy + 130, title, 30, True, col, ha="left")
+    t = d["transcription"]["compliant"]
+    if t < 0.9:   # the benchmark scores only the answers that copy the sentence
+        write(ax, x + text_width(ax, title, 30, True) + 16, y + (len(asked) - 1) * dy + 128,
+              f"copies the sentence in {100 * t:.0f}%", 22, color=MUTED, ha="left")
     for layer in (0, 12, 24, 35):
         write(ax, lx(layer), y - 44, str(layer), 22, color=MUTED)
     write(ax, x + w / 2, y - 84, "layer", 26, color=MUTED)
