@@ -1,0 +1,63 @@
+{
+  "model": "qwen3_4b_magician",
+  "main_run": "results/raw/20261021_003333_qwen3_4b_magician_activation_control",
+  "channel_set": "projection",
+  "channels": [
+    "proj"
+  ],
+  "link": "linear",
+  "d_ref": {
+    "engage": 16.4,
+    "suppress": 3.0,
+    "dial_resolution": 3.0,
+    "temporal_control": 6.9,
+    "coverage": 4.11,
+    "layer_targeting": 5.0
+  },
+  "scalar": 0.3196947195063775,
+  "ci_lo": 0.31035676259453737,
+  "ci_hi": 0.4546183898210148,
+  "n_boot": 2000,
+  "seed": 0,
+  "n_sentences": 44,
+  "n_concepts": 10,
+  "dropped_replicates": 0,
+  "components": {
+    "engage|proj": {
+      "obs": 5.6554820258024145,
+      "p_obs": 0.6724232324939761,
+      "lo": 4.860398391546017,
+      "hi": 5075130462649.364
+    },
+    "suppress|proj": {
+      "obs": 0.05342478477444947,
+      "p_obs": 0.5089041307957416,
+      "lo": -0.0032000916783891152,
+      "hi": 0.14224965560657193
+    },
+    "coverage|proj": {
+      "obs": 1.0066467147631564,
+      "p_obs": 0.6224631039857854,
+      "lo": 0.7443484156999218,
+      "hi": 2.1458804526931403
+    },
+    "dial_rank|proj": {
+      "obs": 0.9761403508771932,
+      "p_obs": 0.9880701754385965,
+      "lo": 0.9381480433010237,
+      "hi": 0.997436507936508
+    },
+    "temporal_control|proj": {
+      "obs": 0.8113289536701395,
+      "p_obs": 0.5587919531645028,
+      "lo": 0.6507793147173564,
+      "hi": 1.2514921342459493
+    },
+    "layer_targeting|proj": {
+      "obs": 2.0182795937743574,
+      "p_obs": 0.7018279593774357,
+      "lo": 1.6810153746840004,
+      "hi": 2.4005823997341538
+    }
+  }
+}

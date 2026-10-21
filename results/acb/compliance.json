@@ -1,0 +1,72 @@
+{
+ "qwen35_4b": {
+  "main": {
+   "compliant": 8588,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8800,
+   "n": 8800
+  }
+ },
+ "qwen3_4b": {
+  "main": {
+   "compliant": 8158,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8800,
+   "n": 8800
+  }
+ },
+ "qwen3_4b_magician": {
+  "main": {
+   "compliant": 4100,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 4578,
+   "n": 8800
+  }
+ },
+ "qwen3_4b_magician_noplan": {
+  "main": {
+   "compliant": 8453,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8762,
+   "n": 8800
+  }
+ },
+ "qwen3_1_7b": {
+  "main": {
+   "compliant": 7195,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 8674,
+   "n": 8800
+  }
+ },
+ "qwen3_1_7b_magician": {
+  "main": {
+   "compliant": 0,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 0,
+   "n": 8800
+  }
+ },
+ "qwen3_1_7b_magician_noplan": {
+  "main": {
+   "compliant": 0,
+   "n": 8600
+  },
+  "lt": {
+   "compliant": 0,
+   "n": 8800
+  }
+ }
+}
