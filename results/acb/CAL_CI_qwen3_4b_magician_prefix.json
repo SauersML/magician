@@ -1,0 +1,324 @@
+{
+ "model": "qwen3_4b_magician_prefix",
+ "method": "two-way bootstrap, double-bootstrap calibrated to 95%",
+ "scalar": 0.30967815480240213,
+ "ci_lo": 0.2820076295075483,
+ "ci_hi": 0.33060500589749026,
+ "S": {
+  "obs": 0.30967815480240213,
+  "lo": 0.2820076295075483,
+  "hi": 0.33060500589749026,
+  "kind": "percentile",
+  "tail_lo": 0.002,
+  "tail_hi": 0.1,
+  "calibration_miss_below": 0.023,
+  "calibration_miss_above": 0.024,
+  "coverage": 0.961,
+  "coverage_ci": [
+   0.947069064214555,
+   0.9721228512046636
+  ],
+  "coverage_uncalibrated": 0.908,
+  "under_covers": false,
+  "calibration": {
+   "percentile": {
+    "i_lo": 1,
+    "i_hi": 18,
+    "ok": true,
+    "miss": 0.047,
+    "below": 0.023,
+    "above": 0.024,
+    "width": 0.0482769166870389
+   },
+   "basic": {
+    "i_lo": 6,
+    "i_hi": 6,
+    "ok": true,
+    "miss": 0.048,
+    "below": 0.024,
+    "above": 0.024,
+    "width": 0.05479179717135965
+   }
+  },
+  "n_boot_finite": 20000
+ },
+ "components": {
+  "engage|proj": {
+   "obs": 4.937568351995161,
+   "lo": 4.006778907629569,
+   "hi": 5.795914699390801,
+   "kind": "basic",
+   "tail_lo": 0.06,
+   "tail_hi": 0.0125,
+   "calibration_miss_below": 0.024,
+   "calibration_miss_above": 0.023,
+   "coverage": 0.952,
+   "coverage_ci": [
+    0.9368598845984908,
+    0.9643997346571167
+   ],
+   "coverage_uncalibrated": 0.922,
+   "under_covers": false,
+   "calibration": {
+    "percentile": {
+     "i_lo": 3,
+     "i_hi": 17,
+     "ok": true,
+     "miss": 0.046,
+     "below": 0.023,
+     "above": 0.023,
+     "width": 1.977809812893454
+    },
+    "basic": {
+     "i_lo": 16,
+     "i_hi": 6,
+     "ok": true,
+     "miss": 0.047,
+     "below": 0.024,
+     "above": 0.023,
+     "width": 1.915067986647165
+    }
+   },
+   "n_boot_finite": 20000
+  },
+  "suppress|proj": {
+   "obs": 0.050313743974822814,
+   "lo": -0.029816704092728647,
+   "hi": 0.11383192927531703,
+   "kind": "percentile",
+   "tail_lo": 0.001,
+   "tail_hi": 0.1,
+   "calibration_miss_below": 0.024,
+   "calibration_miss_above": 0.02,
+   "coverage": 0.946,
+   "coverage_ci": [
+    0.9301259944229326,
+    0.9591766488743693
+   ],
+   "coverage_uncalibrated": 0.897,
+   "under_covers": false,
+   "calibration": {
+    "percentile": {
+     "i_lo": 0,
+     "i_hi": 18,
+     "ok": true,
+     "miss": 0.044,
+     "below": 0.024,
+     "above": 0.02,
+     "width": 0.14667358041670303
+    },
+    "basic": {
+     "i_lo": 15,
+     "i_hi": 3,
+     "ok": true,
+     "miss": 0.05,
+     "below": 0.025,
+     "above": 0.025,
+     "width": 0.16285643903244318
+    }
+   },
+   "n_boot_finite": 20000
+  },
+  "coverage|proj": {
+   "obs": 1.1081373660705505,
+   "lo": 0.8048814431076159,
+   "hi": 1.4097624283366577,
+   "kind": "percentile",
+   "tail_lo": 0.005,
+   "tail_hi": 0.075,
+   "calibration_miss_below": 0.017,
+   "calibration_miss_above": 0.019,
+   "coverage": 0.969,
+   "coverage_ci": [
+    0.9562849149937611,
+    0.9788418280297914
+   ],
+   "coverage_uncalibrated": 0.935,
+   "under_covers": false,
+   "calibration": {
+    "percentile": {
+     "i_lo": 3,
+     "i_hi": 17,
+     "ok": true,
+     "miss": 0.036000000000000004,
+     "below": 0.017,
+     "above": 0.019,
+     "width": 0.6208681450259455
+    },
+    "basic": {
+     "i_lo": 2,
+     "i_hi": 3,
+     "ok": true,
+     "miss": 0.043,
+     "below": 0.022,
+     "above": 0.021,
+     "width": 0.8559335920322969
+    }
+   },
+   "n_boot_finite": 20000
+  },
+  "dial_rank|proj": {
+   "obs": 0.9496000000000001,
+   "lo": 0.846798,
+   "hi": 0.9824000000000006,
+   "kind": "percentile",
+   "tail_lo": 0.001,
+   "tail_hi": 0.05,
+   "calibration_miss_below": 0.093,
+   "calibration_miss_above": 0.02,
+   "coverage": 0.885,
+   "coverage_ci": [
+    0.8635844321371672,
+    0.9041166200267362
+   ],
+   "coverage_uncalibrated": 0.785,
+   "under_covers": true,
+   "calibration": {
+    "percentile": {
+     "i_lo": 0,
+     "i_hi": 15,
+     "ok": false,
+     "miss": 0.113,
+     "below": 0.093,
+     "above": 0.02,
+     "width": 0.11440040000000012
+    },
+    "basic": {
+     "i_lo": 0,
+     "i_hi": 17,
+     "ok": false,
+     "miss": 0.222,
+     "below": 0.2,
+     "above": 0.022,
+     "width": 0.07640059999999993
+    }
+   },
+   "n_boot_finite": 20000
+  },
+  "temporal_control|proj": {
+   "obs": 0.7873053961043338,
+   "lo": 0.628226391612044,
+   "hi": 1.0295215636805608,
+   "kind": "percentile",
+   "tail_lo": 0.0175,
+   "tail_hi": 0.003,
+   "calibration_miss_below": 0.024,
+   "calibration_miss_above": 0.022,
+   "coverage": 0.966,
+   "coverage_ci": [
+    0.9528105613842925,
+    0.9763413518924032
+   ],
+   "coverage_uncalibrated": 0.914,
+   "under_covers": false,
+   "calibration": {
+    "percentile": {
+     "i_lo": 8,
+     "i_hi": 2,
+     "ok": true,
+     "miss": 0.046,
+     "below": 0.024,
+     "above": 0.022,
+     "width": 0.3776130792565059
+    },
+    "basic": {
+     "i_lo": 7,
+     "i_hi": 0,
+     "ok": false,
+     "miss": 0.055,
+     "below": 0.025,
+     "above": 0.03,
+     "width": 0.3878424573542546
+    }
+   },
+   "n_boot_finite": 20000
+  },
+  "layer_targeting|proj": {
+   "obs": 1.9165405269001026,
+   "lo": 1.5795776923087386,
+   "hi": 2.468910191221653,
+   "kind": "percentile",
+   "tail_lo": 0.0125,
+   "tail_hi": 0.001,
+   "calibration_miss_below": 0.023,
+   "calibration_miss_above": 0.026,
+   "coverage": 0.958,
+   "coverage_ci": [
+    0.9436497084242553,
+    0.96956529373686
+   ],
+   "coverage_uncalibrated": 0.892,
+   "under_covers": true,
+   "calibration": {
+    "percentile": {
+     "i_lo": 6,
+     "i_hi": 0,
+     "ok": false,
+     "miss": 0.049,
+     "below": 0.023,
+     "above": 0.026,
+     "width": 0.792660051389029
+    },
+    "basic": {
+     "i_lo": 9,
+     "i_hi": 0,
+     "ok": false,
+     "miss": 0.060000000000000005,
+     "below": 0.025,
+     "above": 0.035,
+     "width": 0.7159032323016676
+    }
+   },
+   "n_boot_finite": 20000
+  }
+ },
+ "coverage": {
+  "engage": 0.952,
+  "suppress": 0.946,
+  "coverage": 0.969,
+  "dial_rank": 0.885,
+  "temporal_control": 0.966,
+  "layer_targeting": 0.958,
+  "S": 0.961
+ },
+ "under_covers": {
+  "engage": false,
+  "suppress": false,
+  "coverage": false,
+  "dial_rank": true,
+  "temporal_control": false,
+  "layer_targeting": true,
+  "S": false
+ },
+ "n_outer_calibration": 1000,
+ "n_outer_check": 1000,
+ "n_inner": 1000,
+ "n_boot": 20000,
+ "tail_levels": [
+  0.001,
+  0.002,
+  0.003,
+  0.005,
+  0.0075,
+  0.01,
+  0.0125,
+  0.015,
+  0.0175,
+  0.02,
+  0.0225,
+  0.025,
+  0.03,
+  0.035,
+  0.04,
+  0.05,
+  0.06,
+  0.075,
+  0.1,
+  0.125,
+  0.15,
+  0.2,
+  0.25
+ ],
+ "n_sentences": 50,
+ "n_concepts": 10
+}
